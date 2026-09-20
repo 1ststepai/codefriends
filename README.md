@@ -54,6 +54,12 @@ npm run dev
 
 Open the popout in two browser profiles (or a window + a private window). Sign in as `maya` in one and `parker` in the other. Click a friend to DM. Presence and messages are live.
 
+To fill **Agents online** the way the concept mockup does (without a second human), keep the seed agent sockets alive:
+
+```bash
+npm run demo:agents
+```
+
 To install as a PWA, open the popout in Chrome / Edge and use **Install app** / **Add to dock**. That is the intended “lightweight window.”
 
 ### Cursor / VS Code extension

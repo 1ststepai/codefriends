@@ -14,6 +14,7 @@
     "dev": "concurrently -n server,popout -c cyan,magenta \"npm run dev -w @codefriends/server\" \"npm run dev -w @codefriends/popout\"",
     "build": "npm run build -w @codefriends/shared && npm run build -w @codefriends/server && npm run build -w @codefriends/popout && npm run compile -w codefriends",
     "smoke": "npm run smoke -w @codefriends/server",
+    "demo:agents": "npm run demo:agents -w @codefriends/server",
     "lint": "npm run build -w @codefriends/shared && npm run build -w @codefriends/server && npm run compile -w codefriends"
   },
   "devDependencies": {
