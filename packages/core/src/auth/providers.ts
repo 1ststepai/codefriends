@@ -1,5 +1,5 @@
 import type { AuthProvider, AuthProviderInfo } from "@codefriends/shared";
-import type { ServerConfig } from "../config.js";
+import type { RuntimeConfig } from "../config.js";
 import { googleGeminiAdapter } from "./google-gemini.js";
 import type { AuthProviderAdapter } from "./types.js";
 
@@ -13,7 +13,7 @@ export const PROVIDER_COPY: Record<
     blockedReason:
       "Cursor does not publish a third-party OAuth / identity API for “Sign in with Cursor.” MCP OAuth in the IDE is the reverse direction (Cursor talking to your server), not Cursor account identity for an external app.",
     nextStep:
-      "When Anysphere documents a public identity endpoint (or an official extension session API that yields a stable Cursor user id), implement start/complete on the cursor adapter. Until then the Cursor extension shows an opt-in “Connect CodeFriends?” prompt (not Cursor account SSO) and opens the popout with ?provider=cursor, optionally passing a CodeFriends session via handoff.",
+      "When Anysphere documents a public identity endpoint (or an official extension session API that yields a stable Cursor user id), implement start/complete on the cursor adapter. Until then the Cursor extension opens the popout with ?provider=cursor and can pass a CodeFriends session via handoff.",
   },
   claude: {
     label: "Claude",
@@ -40,11 +40,12 @@ export const PROVIDER_COPY: Record<
   dev: {
     label: "Dev username",
     accountOf: "local demo",
-    nextStep: "Enabled automatically outside production. Force with CODEFRIENDS_DEV_LOGIN=1; disable with =0.",
+    nextStep:
+      "Enabled automatically outside production. Force with CODEFRIENDS_DEV_LOGIN=1; disable with =0.",
   },
 };
 
-export function buildAdapters(config: ServerConfig): Map<AuthProvider, AuthProviderAdapter> {
+export function buildAdapters(config: RuntimeConfig): Map<AuthProvider, AuthProviderAdapter> {
   const adapters = new Map<AuthProvider, AuthProviderAdapter>();
   adapters.set("gemini", googleGeminiAdapter(config.google));
   adapters.set("cursor", { id: "cursor", configured: false });
@@ -54,7 +55,10 @@ export function buildAdapters(config: ServerConfig): Map<AuthProvider, AuthProvi
   return adapters;
 }
 
-export function describeProviders(config: ServerConfig, adapters: Map<AuthProvider, AuthProviderAdapter>): AuthProviderInfo[] {
+export function describeProviders(
+  config: RuntimeConfig,
+  adapters: Map<AuthProvider, AuthProviderAdapter>,
+): AuthProviderInfo[] {
   const ids: AuthProvider[] = ["cursor", "claude", "codex", "gemini", "dev"];
   return ids.map((id) => {
     const copy = PROVIDER_COPY[id];

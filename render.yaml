@@ -1,0 +1,18 @@
+# Best-effort Node fallback on Render's free web service.
+# Instances sleep after idle time — WebSockets drop; SQLite on disk is lost
+# unless CODEFRIENDS_LIBSQL_URL points at Turso. Prefer apps/worker.
+
+services:
+  - type: web
+    name: codefriends-api
+    runtime: docker
+    dockerfilePath: ./apps/server/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 8787

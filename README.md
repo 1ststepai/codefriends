@@ -13,17 +13,20 @@ IDE (thin)                         Outside the IDE
 ┌─────────────────────┐            ┌──────────────────────────┐
 │ Cursor / VS Code    │  open URL  │ apps/popout (Vite/React) │
 │ status bar:         │ ─────────► │ friends + presence + DMs │
-│ CodeFriends · N     │  handoff   │ installable as a PWA     │
+│ CodeFriends · N     │  handoff   │ static SPA / PWA         │
 └─────────┬───────────┘            └────────────┬─────────────┘
           │ GET /api/presence                   │ HTTP + WebSocket
-          └──────────────► apps/server ◄────────┘
-                           SQLite + sessions
+          └──────────────► API (D1 + hub) ◄─────┘
+                           Cloudflare Worker  (prod, $0)
+                           or apps/server     (local / Node fallback)
 ```
 
 | Path | Role |
 | --- | --- |
-| `apps/server` | Multi-provider identity, friend graph, presence, 1:1 DMs over WebSocket |
-| `apps/popout` | Full dark UI (the thing in the concept mockup) |
+| `apps/popout` | Full dark UI. Static build; production target is **Vercel** (or Cloudflare Pages) |
+| `apps/worker` | **$0 production API**: Cloudflare Workers + D1 + Durable Object presence hub |
+| `apps/server` | Local Node + `better-sqlite3` (smoke / `npm run dev`). Optional Fly/Render + Turso fallback |
+| `packages/core` | Shared store, SQL migrations, auth, HTTP + WS handlers |
 | `extensions/cursor` | VS Code-compatible status bar + opt-in **Connect CodeFriends?** prompt — **no chat webview** |
 | `plugins/claude` | Claude Code plugin: SessionStart prompt + `/codefriends` (`?provider=claude`) |
 | `plugins/codex` | Codex plugin: SessionStart prompt + skill (`?provider=codex`) |
@@ -31,21 +34,21 @@ IDE (thin)                         Outside the IDE
 | `packages/connect-client` | Tiny local companion CLI used by those plugins (also works for generic/Ollama GUIs) |
 | `packages/shared` | Shared TypeScript types, protocol, and connect-prompt policy |
 
-**Out of scope for this slice:** native Claude / Codex / Gemini extensions, voice, Live Share, payments, a public cloud deploy.
+**Out of scope:** voice, Live Share, media/blob storage, payments, guaranteed 2000 simultaneous sockets.
 
 ## Persistence
 
-User accounts, **linked provider identities**, friend edges, and 1:1 DM history live in **SQLite** (`better-sqlite3`). Presence sockets stay in memory; `last_seen` / status fields are written back to the database.
+User accounts, **linked provider identities**, friend edges, and 1:1 DM history live in ordinary SQLite SQL (`users`, `identities`, `sessions`, `friends`, `messages`). Presence sockets stay in memory (Node) or a Cloudflare Durable Object (production); `last_seen` / status fields are written back to the database.
 
-| Item | Default |
-| --- | --- |
-| File | `apps/server/data/codefriends.sqlite` (gitignored) |
-| Override | `CODEFRIENDS_DB=/absolute/or/relative/path.sqlite` |
-| Schema | `apps/server/src/db/sqlite.ts` (named migrations) |
+| Driver | When | Env |
+| --- | --- | --- |
+| `better-sqlite3` file | Local `npm run dev` / smoke | `CODEFRIENDS_DB` (default `apps/server/data/codefriends.sqlite`, gitignored) |
+| **Cloudflare D1** | **$0 production** (`apps/worker`) | `wrangler.toml` `[[d1_databases]]` |
+| Turso / libSQL | Optional Node host with ephemeral disks | `CODEFRIENDS_LIBSQL_URL` + `CODEFRIENDS_LIBSQL_AUTH_TOKEN` |
 
-A process restart keeps users, identities, friends, and DMs. Seed data (`maya` / `parker` / …) is **idempotent** — it is inserted only when missing, never wiped.
+Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_thread_cap`). A process / Worker restart keeps users, identities, friends, and DMs. Seed data (`maya` / `parker` / …) is **idempotent** — inserted only when missing, never wiped.
 
-**Why SQLite:** one file, no extra daemon, fine for a laptop demo and an early single-node deploy. The SQL is ordinary (`users`, `identities`, `sessions`, `friends`, `messages`). Moving to Postgres later means swapping `apps/server/src/db/sqlite.ts` for a `pg` driver and keeping the same table names — do not sprinkle sqlite-only APIs outside that module.
+**DM history cap:** each 1:1 thread keeps the last **200** messages (`CODEFRIENDS_DM_HISTORY_LIMIT`). Older rows are pruned on write. Text only — no media, no blob store.
 
 Sessions are random 32-byte bearer tokens; only a SHA-256 hash is stored. There are **no passwords**. One-time **handoff** codes (also hashed, ~2 minutes) let the Cursor extension open the popout already signed in.
 
@@ -193,7 +196,7 @@ npm run smoke
 npm run test:connect
 ```
 
-Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked`
+Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned`
 
 `test:connect` prints the documented prompt paths (first run, Not now cooldown, Don’t ask again, already connected, host popout URLs).
 
@@ -201,7 +204,7 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/health` | Liveness + online count + `store: "sqlite"` |
+| `GET` | `/health` | Liveness + online count + `store` (`sqlite` / `libsql` / `d1`) + `dmHistoryLimit` |
 | `GET` | `/api/auth/providers` | Catalog: live / unconfigured / blocked / dev / mock |
 | `POST` | `/api/auth/login` | Dev only. `{ username, displayName?, client? }` → `{ token, user }` |
 | `GET` | `/api/auth/gemini/start` | Google OIDC (needs env). `?link=1&token=` to attach to the current user |
@@ -217,9 +220,124 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 | `GET` | `/api/presence` | Public online count (status bar) |
 | `WS` | `/ws?token=` | `hello`, `presence`, `add_friend`, `dm`, `typing` (unchanged) |
 
-## Deploy notes (not done here)
+## $0 deploy (not already live)
 
-Run `apps/server` on a single VM with a durable disk for the SQLite file (or set `CODEFRIENDS_DB`). Put TLS in front. Set `NODE_ENV=production`, configure Gemini/Google OAuth redirect URLs for the public origin, and leave `CODEFRIENDS_DEV_LOGIN` / `CODEFRIENDS_MOCK_PROVIDERS` off. Postgres is the later scale step, not a requirement to leave localhost.
+Nothing in this repo is pre-hosted. You click through **Vercel** (popout) and **Cloudflare** (API + D1 + WebSockets). No new paid plan is required if you already have a free/Hobby Vercel account; Cloudflare’s free Workers + D1 + Durable Objects tier does not need a second subscription.
+
+**Product shape that keeps it free:** text presence + 1:1 DMs only. No images, voice, or object storage.
+
+**Honest scale:** designed for about **1–2000 registered users** with light concurrent presence. That is **not** a guarantee of 2000 simultaneous sockets. Free-tier request and duration limits will shed load before that.
+
+### What you click
+
+| Where | What to create | Why |
+| --- | --- | --- |
+| [Cloudflare Dashboard](https://dash.cloudflare.com) → Workers & Pages | A free Workers account (if you do not have one) | Hosts the API + WebSockets |
+| Cloudflare → Workers & Pages → D1 | Database named `codefriends` | Durable users / friends / DMs |
+| This repo → `apps/worker/wrangler.toml` | Paste the D1 `database_id` | Worker binding |
+| Cloudflare → Workers → `codefriends-api` → Settings → Variables | Secrets / vars listed below | Auth + CORS + popout redirect |
+| [Vercel](https://vercel.com) → Add New Project | Import this Git repo, **Root Directory = repo root** | Builds `apps/popout` via `vercel.json` |
+| Vercel → Project → Settings → Environment Variables | `VITE_CODEFRIENDS_API_URL`, `VITE_CODEFRIENDS_WS_URL` | Baked into the static SPA at **build** time |
+| Google Cloud Console (optional) | Web OAuth client | Only if you want Gemini / Google login |
+
+Chicken-and-egg: deploy the Worker first (you get `*.workers.dev`), then deploy the popout with that URL, then set `CODEFRIENDS_POPOUT_URL` on the Worker and redeploy it. Changing Vite env vars later requires a **Vercel Redeploy**.
+
+### 1. Cloudflare API (preferred backend)
+
+From a machine with Node 20+ and a Cloudflare login:
+
+```bash
+cd apps/worker
+npx wrangler login
+npx wrangler d1 create codefriends
+```
+
+Copy the printed `database_id` into `apps/worker/wrangler.toml` (replace the all-zero placeholder). Commit that id — it is not a secret.
+
+```bash
+# optional local check (uses local D1; copy .dev.vars.example → .dev.vars)
+npx wrangler dev
+
+npx wrangler deploy
+```
+
+Dashboard clicks after deploy:
+
+1. Workers & Pages → **codefriends-api** → Settings → **Domains** — copy `https://codefriends-api.<subdomain>.workers.dev`.
+2. Settings → **Variables and Secrets**:
+
+| Name | Production value | Secret? |
+| --- | --- | --- |
+| `CODEFRIENDS_PUBLIC_URL` | `https://codefriends-api.<subdomain>.workers.dev` | no |
+| `CODEFRIENDS_POPOUT_URL` | `https://<your-app>.vercel.app` (set after step 2) | no |
+| `CODEFRIENDS_DEV_LOGIN` | `0` for a public app; `1` only if you accept passwordless usernames on the internet | no |
+| `CODEFRIENDS_SEED` | `1` to keep the demo roster; `0` for an empty friends graph | no |
+| `CODEFRIENDS_MOCK_PROVIDERS` | `0` | no |
+| `CODEFRIENDS_DM_HISTORY_LIMIT` | `200` | no |
+| `GEMINI_GOOGLE_CLIENT_ID` / `SECRET` / `CALLBACK_URL` | only if using Google login; callback = `{CODEFRIENDS_PUBLIC_URL}/api/auth/gemini/callback` | secret for the client secret |
+
+`GET https://codefriends-api.<subdomain>.workers.dev/health` should return `{ "ok": true, "store": "d1", ... }`. That endpoint is **not** provisioned for you until you deploy.
+
+### 2. Vercel popout (static SPA)
+
+1. Vercel → **Add New** → Import the GitHub repo.
+2. Leave **Root Directory** as the repository root (`vercel.json` already points at `apps/popout/dist`).
+3. Framework Preset: **Other**.
+4. Settings → Environment Variables (Production):
+
+| Name | Value |
+| --- | --- |
+| `VITE_CODEFRIENDS_API_URL` | `https://codefriends-api.<subdomain>.workers.dev` |
+| `VITE_CODEFRIENDS_WS_URL` | `wss://codefriends-api.<subdomain>.workers.dev/ws` |
+
+5. Deploy. Open the `.vercel.app` URL — you should see the login screen. Sign-in will fail until the Worker URL is reachable and CORS/`CODEFRIENDS_POPOUT_URL` match that origin.
+6. Back on Cloudflare, set `CODEFRIENDS_POPOUT_URL` to the Vercel origin and **Deploy** the Worker again.
+
+Alternative: **Cloudflare Pages** on `apps/popout/dist` with the same Vite env vars. `apps/popout/public/_redirects` is the SPA fallback.
+
+### 3. Google OAuth (optional, still $0)
+
+Google Cloud Console → APIs & Services → Credentials → Create OAuth client → **Web application**.
+
+- Authorized JavaScript origins: the Vercel origin.
+- Authorized redirect URI: `https://codefriends-api.<subdomain>.workers.dev/api/auth/gemini/callback` (must match `GEMINI_GOOGLE_CALLBACK_URL` exactly).
+
+### 4. After it is up
+
+Point the Cursor/VS Code settings (or `CODEFRIENDS_POPOUT_URL` / `CODEFRIENDS_SERVER_URL` for connect plugins) at the public URLs:
+
+| Setting | Example |
+| --- | --- |
+| `codefriends.popoutUrl` | `https://<your-app>.vercel.app` |
+| `codefriends.serverUrl` | `https://codefriends-api.<subdomain>.workers.dev` |
+
+### Free-tier limits (will move; check the vendor pages)
+
+| Vendor | Typical free cap that matters here | What happens when you exceed it |
+| --- | --- | --- |
+| **Vercel Hobby** | Static hosting + bandwidth cap | Popout 4xx / paused project — upgrade or wait |
+| **Workers requests** | ~100k / day on the free plan | API/WS calls start failing until reset |
+| **Durable Objects** | Free-plan request + duration budget (hibernating sockets are cheaper than a hot isolate) | Presence drops; clients reconnect |
+| **D1** | ~5M reads / 100k writes / day, ~5 GB | Writes fail; prune + text-only DMs keep this small |
+| **Turso Starter** (fallback only) | Free row / storage quota | Node fallback cannot persist |
+
+This is **not** a SLA. A busy evening of reconnect storms can burn the Workers daily budget.
+
+### Node fallback (still $0, worse realtime)
+
+Use only if you already have Fly or Render free allowance. Both often **ask for a credit card** even at $0, machines **sleep**, and a local SQLite file **dies** on recycle.
+
+1. Create a free [Turso](https://turso.tech) database (libSQL). Set `CODEFRIENDS_LIBSQL_URL` + `CODEFRIENDS_LIBSQL_AUTH_TOKEN`.
+2. `apps/server/Dockerfile` + root `fly.toml` / `render.yaml` — replace placeholder app names; do not assume they exist.
+3. Set `HOST=0.0.0.0`, `CODEFRIENDS_PUBLIC_URL`, `CODEFRIENDS_POPOUT_URL`, `NODE_ENV=production`.
+4. Expect WebSockets to drop when the instance sleeps. Prefer `apps/worker`.
+
+### What you do **not** need
+
+- A paid always-on Node VM
+- Checking `.env` or OAuth secrets into git
+- Blob / media storage
+- Postgres (ordinary SQL; D1 / libSQL / SQLite share the same schema)
 
 ## Next
 

@@ -8,7 +8,7 @@ import type {
 } from "@codefriends/shared";
 import { CLIENTS, CLIENT_LABEL } from "@codefriends/shared";
 import type { AuthProviderInfo } from "@codefriends/shared";
-import { fetchProviders, login, mockProviderLogin, redeemHandoff, wsUrl } from "./api";
+import { apiUrl, fetchProviders, login, mockProviderLogin, redeemHandoff, wsUrl } from "./api";
 import { clearSession, loadSession, saveSession } from "./session";
 
 const AGENT_CLIENTS = new Set<ClientKind>(["cursor", "claude", "codex", "gemini"]);
@@ -333,7 +333,7 @@ function Login({
             disabled={busy}
             onStart={() => {
               if (provider.startPath) {
-                window.location.href = `${provider.startPath}?client=${encodeURIComponent(clientHint() ?? provider.id)}`;
+                window.location.href = `${apiUrl(provider.startPath)}?client=${encodeURIComponent(clientHint() ?? provider.id)}`;
               }
             }}
           />
@@ -561,7 +561,7 @@ function LinkedAccounts({
             <a
               key={provider.id}
               className="link-account"
-              href={`${provider.startPath}?link=1&token=${encodeURIComponent(token)}&client=${encodeURIComponent(self.client)}`}
+              href={`${apiUrl(provider.startPath)}?link=1&token=${encodeURIComponent(token)}&client=${encodeURIComponent(self.client)}`}
             >
               Link {provider.label}
             </a>

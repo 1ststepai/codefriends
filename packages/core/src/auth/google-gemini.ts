@@ -1,5 +1,5 @@
-import { createHash, randomBytes } from "node:crypto";
 import type { AuthProviderAdapter, OAuthStart, ProviderProfile } from "./types.js";
+import { base64Url, randomBytes, sha256Bytes } from "../crypto.js";
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -13,16 +13,16 @@ export function googleGeminiAdapter(creds: {
     id: "gemini",
     configured: Boolean(creds.clientId && creds.clientSecret),
 
-    start({ state, callbackUrl }): OAuthStart {
+    async start({ state, callbackUrl }): Promise<OAuthStart> {
       const codeVerifier = base64Url(randomBytes(32));
-      const codeChallenge = base64Url(createHash("sha256").update(codeVerifier).digest());
+      const challenge = base64Url(await sha256Bytes(new TextEncoder().encode(codeVerifier)));
       const url = new URL(AUTH_URL);
       url.searchParams.set("client_id", creds.clientId);
       url.searchParams.set("redirect_uri", callbackUrl);
       url.searchParams.set("response_type", "code");
       url.searchParams.set("scope", "openid email profile");
       url.searchParams.set("state", state);
-      url.searchParams.set("code_challenge", codeChallenge);
+      url.searchParams.set("code_challenge", challenge);
       url.searchParams.set("code_challenge_method", "S256");
       url.searchParams.set("access_type", "online");
       url.searchParams.set("prompt", "select_account");
@@ -58,7 +58,6 @@ export function googleGeminiAdapter(creds: {
         sub?: string;
         email?: string;
         name?: string;
-        email_verified?: boolean;
       };
       if (!info.sub) throw new Error("Google userinfo missing sub");
 
@@ -71,8 +70,4 @@ export function googleGeminiAdapter(creds: {
       };
     },
   };
-}
-
-function base64Url(buf: Buffer): string {
-  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }

@@ -52,45 +52,48 @@ const DEMO: Array<{
   },
 ];
 
-export function seedDemo(store: Store): void {
-  const created = DEMO.map((row) => {
-    const existing = store.userByName(row.username);
+/** Idempotent: inserts missing seed users/edges/DMs, never wipes existing rows. */
+export async function seedDemo(store: Store): Promise<void> {
+  const created = [];
+  for (const row of DEMO) {
+    const existing = await store.userByName(row.username);
     if (existing) {
-      store.ensureIdentity(existing.id, {
+      await store.ensureIdentity(existing.id, {
         provider: "dev",
         subject: existing.username,
         displayName: existing.displayName,
         usernameHint: existing.username,
       });
-      return existing;
+      created.push(existing);
+      continue;
     }
-    const user = store.createUser({
+    const user = await store.createUser({
       username: row.username,
       displayName: row.displayName,
       client: row.client,
       statusText: row.statusText,
       lastSeen: Date.now() - (row.lastSeenOffset ?? 0),
     });
-    store.ensureIdentity(user.id, {
+    await store.ensureIdentity(user.id, {
       provider: "dev",
       subject: user.username,
       displayName: user.displayName,
       usernameHint: user.username,
     });
-    return user;
-  });
+    created.push(user);
+  }
 
   for (const a of created) {
     for (const b of created) {
-      if (a.id !== b.id) store.addFriend(a.id, b.username);
+      if (a.id !== b.id) await store.addFriend(a.id, b.username);
     }
   }
 
-  const maya = store.userByName("maya")!;
-  const parker = store.userByName("parker")!;
-  if (!store.conversationHasMessages(maya.id, parker.id)) {
-    store.addMessage(maya.id, parker.id, "Heyyyy, curious what you're working on.");
-    store.addMessage(maya.id, parker.id, "That refactor look interesting.");
+  const maya = (await store.userByName("maya"))!;
+  const parker = (await store.userByName("parker"))!;
+  if (!(await store.conversationHasMessages(maya.id, parker.id))) {
+    await store.addMessage(maya.id, parker.id, "Heyyyy, curious what you're working on.");
+    await store.addMessage(maya.id, parker.id, "That refactor look interesting.");
   }
 }
 

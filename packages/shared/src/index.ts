@@ -104,6 +104,10 @@ export function isValidUsername(raw: string): boolean {
   return /^[a-z0-9][a-z0-9_-]{1,23}$/.test(normalizeUsername(raw));
 }
 
+/** Last N text DMs kept per 1:1 thread. Older rows are pruned on write. */
+export const DM_HISTORY_LIMIT_DEFAULT = 200;
+export const DM_TEXT_MAX = 2000;
+
 export {
   CONNECT_SNOOZE_MS,
   CONNECT_HOSTS,

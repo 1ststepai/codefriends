@@ -6,18 +6,20 @@
   "license": "MIT",
   "workspaces": [
     "packages/shared",
+    "packages/core",
     "packages/connect-client",
     "apps/server",
     "apps/popout",
+    "apps/worker",
     "extensions/cursor"
   ],
   "scripts": {
     "dev": "concurrently -n server,popout -c cyan,magenta \"npm run dev -w @codefriends/server\" \"npm run dev -w @codefriends/popout\"",
-    "build": "npm run build -w @codefriends/shared && npm run build -w @codefriends/server && npm run build -w @codefriends/popout && npm run compile -w codefriends",
+    "build": "npm run build -w @codefriends/shared && npm run build -w @codefriends/core && npm run build -w @codefriends/server && npm run build -w @codefriends/popout && npm run compile -w codefriends && npm run typecheck -w @codefriends/worker",
     "smoke": "npm run smoke -w @codefriends/server",
     "demo:agents": "npm run demo:agents -w @codefriends/server",
     "test:connect": "npm run test -w @codefriends/connect-client && npm run test -w codefriends",
-    "lint": "npm run build -w @codefriends/shared && npm run build -w @codefriends/server && npm run compile -w codefriends && npm run test:connect"
+    "lint": "npm run build && npm run test:connect"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

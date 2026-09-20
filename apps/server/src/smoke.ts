@@ -211,10 +211,59 @@ async function persistAcrossRestart(dbPath: string) {
   }
 }
 
+async function historyCap(dbPath: string) {
+  const server = await startServer({
+    port: 0,
+    seed: false,
+    dbPath,
+    config: { dbPath, devLogin: true, dmHistoryLimit: 3 },
+  });
+  try {
+    const maya = await login(server.url, "maya");
+    const parker = await login(server.url, "parker");
+    const added = await fetch(`${server.url}/api/friends`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${maya.token}`,
+      },
+      body: JSON.stringify({ username: "parker" }),
+    });
+    await json(added, "add friend");
+
+    const a = connect(server.url, maya.token);
+    await a.ready;
+    await a.waitFor("hello_ok");
+
+    for (let i = 0; i < 5; i += 1) {
+      a.ws.send(JSON.stringify({ type: "dm", to: parker.user.id, text: `cap-${i}` }));
+      await a.waitFor("dm");
+    }
+
+    const history = await json<{ messages: Array<{ text: string }> }>(
+      await fetch(`${server.url}/api/messages?with=${parker.user.id}`, {
+        headers: { authorization: `Bearer ${maya.token}` },
+      }),
+      "capped history",
+    );
+    assert.equal(history.messages.length, 3, "thread must keep only the last N DMs");
+    assert.deepEqual(
+      history.messages.map((m) => m.text),
+      ["cap-2", "cap-3", "cap-4"],
+    );
+    a.ws.close();
+  } finally {
+    await server.close();
+  }
+}
+
 async function main() {
-  const dbPath = join(mkdtempSync(join(tmpdir(), "codefriends-smoke-")), "codefriends.sqlite");
-  await persistAcrossRestart(dbPath);
-  console.log("smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked");
+  const dir = mkdtempSync(join(tmpdir(), "codefriends-smoke-"));
+  await persistAcrossRestart(join(dir, "persist.sqlite"));
+  await historyCap(join(dir, "cap.sqlite"));
+  console.log(
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned",
+  );
 }
 
 main().catch((err) => {
