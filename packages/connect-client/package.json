@@ -1,0 +1,16 @@
+{
+  "name": "@codefriends/connect-client",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "codefriends-connect": "./connect.mjs"
+  },
+  "exports": {
+    ".": "./connect.mjs"
+  },
+  "scripts": {
+    "test": "node --test connect.test.mjs"
+  }
+}
