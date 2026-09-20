@@ -23,6 +23,9 @@ export interface ServerConfig extends RuntimeConfig {
   libsqlAuthToken: string;
   host: string;
   port: number;
+  /** Directory of a built `apps/popout` (`dist`). Served when `index.html` exists. */
+  popoutDir: string;
+  servePopout: boolean;
 }
 
 export function isProduction(): boolean {
@@ -31,6 +34,16 @@ export function isProduction(): boolean {
 
 export function defaultDbPath(): string {
   return join(here, "../data/codefriends.sqlite");
+}
+
+export function defaultPopoutDir(): string {
+  return resolve(here, "../../popout/dist");
+}
+
+/** `/health` and `/api/*` stay on the JSON API; everything else can be the SPA. */
+export function isApiHttpPath(pathname: string): boolean {
+  const path = pathname.replace(/\/$/, "") || "/";
+  return path === "/health" || path.startsWith("/api");
 }
 
 export function loadConfig(
@@ -67,6 +80,9 @@ export function loadConfig(
     },
   });
 
+  const popoutDir = overrides?.popoutDir ?? process.env.CODEFRIENDS_POPOUT_DIR ?? defaultPopoutDir();
+  const servePopout = overrides?.servePopout ?? existsSync(join(popoutDir, "index.html"));
+
   return {
     ...base,
     dbPath: overrides?.dbPath ?? process.env.CODEFRIENDS_DB ?? defaultDbPath(),
@@ -74,5 +90,7 @@ export function loadConfig(
     libsqlAuthToken: overrides?.libsqlAuthToken ?? process.env.CODEFRIENDS_LIBSQL_AUTH_TOKEN ?? "",
     host,
     port,
+    popoutDir,
+    servePopout,
   };
 }

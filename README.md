@@ -23,9 +23,9 @@ IDE (thin)                         Outside the IDE
 
 | Path | Role |
 | --- | --- |
-| `apps/popout` | Full dark UI. Static build; production target is **Vercel** (or Cloudflare Pages) |
+| `apps/popout` | Full dark UI. Static build; production target is **Vercel** (or Cloudflare Pages), or served from `apps/server` |
 | `apps/worker` | **$0 production API**: Cloudflare Workers + D1 + Durable Object presence hub |
-| `apps/server` | Local Node + `better-sqlite3` (smoke / `npm run dev`). Optional Fly/Render + Turso fallback |
+| `apps/server` | Local Node + `better-sqlite3` (smoke / `npm run dev`). Serves built `apps/popout/dist` when `index.html` is present. Optional Fly/Render + Turso fallback |
 | `packages/core` | Shared store, SQL migrations, auth, HTTP + WS handlers |
 | `extensions/cursor` | VS Code-compatible status bar + opt-in **Connect CodeFriends?** prompt — **no chat webview** |
 | `plugins/claude` | Claude Code plugin: SessionStart prompt + `/codefriends` (`?provider=claude`) |
@@ -128,6 +128,10 @@ npm run demo:agents
 
 To install as a PWA, open the popout in Chrome / Edge and use **Install app** / **Add to dock**.
 
+### Spare Windows PC (Node + Cloudflare Tunnel, $0)
+
+To run `apps/server` on a spare Windows box — SQLite on disk, built popout served from the API port, Cloudflare quick tunnel or named `codefriends.1ststep.ai` — see **[Self-host on Windows](docs/self-host-windows.md)**. Helper scripts live in `scripts/windows/`. That path does not need Vercel or the Worker; keep `www` / `app` on Vercel and Google MX if you already have them.
+
 ### Cursor / VS Code extension (opt-in, not Cursor’s login screen)
 
 ```bash
@@ -204,6 +208,7 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 
 | Method | Path | Notes |
 | --- | --- | --- |
+| `GET` | `/` (and other non-API paths) | Built popout from `apps/popout/dist` when `index.html` exists; otherwise JSON 404 |
 | `GET` | `/health` | Liveness + online count + `store` (`sqlite` / `libsql` / `d1`) + `dmHistoryLimit` |
 | `GET` | `/api/auth/providers` | Catalog: live / unconfigured / blocked / dev / mock |
 | `POST` | `/api/auth/login` | Dev only. `{ username, displayName?, client? }` → `{ token, user }` |
@@ -323,7 +328,11 @@ Point the Cursor/VS Code settings (or `CODEFRIENDS_POPOUT_URL` / `CODEFRIENDS_SE
 
 This is **not** a SLA. A busy evening of reconnect storms can burn the Workers daily budget.
 
-### Node fallback (still $0, worse realtime)
+### Spare Windows PC (still $0, you keep the machine awake)
+
+Documented separately: **[docs/self-host-windows.md](docs/self-host-windows.md)**. Node + SQLite on a PC you already own, Cloudflare Tunnel for HTTPS. No inbound ports. Quick-tunnel URLs **rotate** every restart; a named tunnel is how you get a stable `codefriends.1ststep.ai`.
+
+### Node fallback on Fly / Render (still $0, worse realtime)
 
 Use only if you already have Fly or Render free allowance. Both often **ask for a credit card** even at $0, machines **sleep**, and a local SQLite file **dies** on recycle.
 

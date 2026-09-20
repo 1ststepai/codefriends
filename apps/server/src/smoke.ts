@@ -4,7 +4,7 @@
  * Starts an ephemeral server — no extra process required.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocket } from "ws";
@@ -257,12 +257,49 @@ async function historyCap(dbPath: string) {
   }
 }
 
+async function servePopout(dbPath: string) {
+  const popoutDir = mkdtempSync(join(tmpdir(), "codefriends-popout-"));
+  mkdirSync(join(popoutDir, "assets"), { recursive: true });
+  writeFileSync(join(popoutDir, "index.html"), "<!doctype html><title>popout</title><p>ok</p>");
+  writeFileSync(join(popoutDir, "assets", "app.js"), "console.log('popout')");
+
+  const server = await startServer({
+    port: 0,
+    seed: false,
+    dbPath,
+    config: { dbPath, devLogin: true, popoutDir, servePopout: true },
+  });
+  try {
+    const home = await fetch(`${server.url}/`);
+    assert.equal(home.status, 200, `GET / ${home.status}`);
+    assert.match(await home.text(), /<p>ok<\/p>/);
+
+    const asset = await fetch(`${server.url}/assets/app.js`);
+    assert.equal(asset.status, 200, `GET /assets/app.js ${asset.status}`);
+    assert.match(await asset.text(), /popout/);
+
+    const spa = await fetch(`${server.url}/some/client/route`);
+    assert.equal(spa.status, 200, `SPA fallback ${spa.status}`);
+    assert.match(await spa.text(), /<p>ok<\/p>/);
+
+    const health = await json<{ ok: boolean; store: string }>(
+      await fetch(`${server.url}/health`),
+      "health through static mount",
+    );
+    assert.equal(health.ok, true);
+    assert.equal(health.store, "sqlite");
+  } finally {
+    await server.close();
+  }
+}
+
 async function main() {
   const dir = mkdtempSync(join(tmpdir(), "codefriends-smoke-"));
   await persistAcrossRestart(join(dir, "persist.sqlite"));
   await historyCap(join(dir, "cap.sqlite"));
+  await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, popout static served",
   );
 }
 
