@@ -361,7 +361,7 @@ export class Store {
            AND id NOT IN (
              SELECT id FROM messages
              WHERE thread_key = ?
-             ORDER BY created_at DESC, id DESC
+             ORDER BY created_at DESC, rowid DESC
              LIMIT ?
            )`,
       )

@@ -19,12 +19,16 @@ export async function greetSocket(store: Store, user: UserRecord, socket: Presen
 export async function closeSocket(store: Store, userId: string, socket: PresenceSocket): Promise<void> {
   const wentOffline = store.presence.detach(userId, socket);
   if (!wentOffline) return;
-  const user = await store.getUser(userId);
-  if (user) {
-    user.lastSeen = Date.now();
-    await store.persistUser(user);
+  try {
+    const user = await store.getUser(userId);
+    if (user) {
+      user.lastSeen = Date.now();
+      await store.persistUser(user);
+    }
+    await broadcastPresence(store, userId);
+  } catch {
+    /* DB may already be closed during process shutdown */
   }
-  await broadcastPresence(store, userId);
 }
 
 export function parseClientMessage(raw: string): WsClientMessage {

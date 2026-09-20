@@ -63,7 +63,7 @@ export async function startServer(opts?: {
 
   const http = createServer(app);
   const wss = new WebSocketServer({ server: http, path: "/ws" });
-  attachWs(wss, store);
+  const sockets = attachWs(wss, store);
 
   const host = opts?.host ?? config.host;
   const port = opts?.port ?? config.port;
@@ -84,17 +84,19 @@ export async function startServer(opts?: {
     config,
     http,
     url,
-    close: () =>
-      new Promise((resolve, reject) => {
-        wss.close((err) => {
-          if (err) reject(err);
-          http.close((httpErr) => {
-            void Promise.resolve(db.close?.()).finally(() => {
-              if (httpErr) reject(httpErr);
-              else resolve();
-            });
-          });
-        });
-      }),
+    close: async () => {
+      for (const client of wss.clients) {
+        client.terminate();
+      }
+      await new Promise<void>((resolve, reject) => {
+        wss.close((err) => (err ? reject(err) : resolve()));
+      });
+      await sockets.drain();
+      await new Promise<void>((resolve, reject) => {
+        http.close((err) => (err ? reject(err) : resolve()));
+        http.closeAllConnections?.();
+      });
+      await Promise.resolve(db.close?.());
+    },
   };
 }

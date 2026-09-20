@@ -9,7 +9,13 @@ import {
   type UserRecord,
 } from "@codefriends/core";
 
-export function attachWs(wss: WebSocketServer, store: Store): void {
+export function attachWs(wss: WebSocketServer, store: Store): { drain: () => Promise<void> } {
+  const pending = new Set<Promise<void>>();
+  const track = (work: Promise<void>) => {
+    pending.add(work);
+    void work.finally(() => pending.delete(work));
+  };
+
   wss.on("connection", (socket, req) => {
     let user: UserRecord | undefined;
     const query = new URL(req.url ?? "/", "http://localhost").searchParams.get("token") ?? "";
@@ -68,7 +74,13 @@ export function attachWs(wss: WebSocketServer, store: Store): void {
 
     socket.on("close", () => {
       if (!user) return;
-      void closeSocket(store, user.id, presenceSocket);
+      track(closeSocket(store, user.id, presenceSocket).catch(() => undefined));
     });
   });
+
+  return {
+    drain: async () => {
+      await Promise.all([...pending]);
+    },
+  };
 }
