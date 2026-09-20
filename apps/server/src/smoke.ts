@@ -17,16 +17,13 @@ async function login(base: string, username: string) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ username }),
   });
-  assert.equal(res.ok, true, `login ${username} failed: ${res.status} ${await res.text()}`);
-  return (await res.json()) as {
-    token: string;
-    user: { id: string; username: string };
-  };
+  return json<{ token: string; user: { id: string; username: string } }>(res, `login ${username}`);
 }
 
 async function json<T>(res: Response, label: string): Promise<T> {
-  assert.equal(res.ok, true, `${label} failed: ${res.status} ${await res.text()}`);
-  return (await res.json()) as T;
+  const text = await res.text();
+  assert.equal(res.ok, true, `${label} failed: ${res.status} ${text}`);
+  return JSON.parse(text) as T;
 }
 
 function connect(base: string, token: string) {
