@@ -2,7 +2,8 @@ import { startServer } from "./app.js";
 
 const server = await startServer();
 console.log(`CodeFriends server ${server.url}`);
-console.log(`SQLite: ${server.config.dbPath}`);
+console.log(`Store: ${server.config.storeKind}${server.config.libsqlUrl ? ` (${server.config.libsqlUrl})` : ` (${server.config.dbPath})`}`);
+console.log(`DM history cap: ${server.config.dmHistoryLimit} msgs/thread`);
 console.log(`Dev username login: ${server.config.devLogin ? "on" : "off"}`);
 console.log(`Mock providers: ${server.config.mockProviders ? "on" : "off"}`);
 console.log(`Gemini/Google OAuth: ${server.config.google.clientId ? "configured" : "unconfigured"}`);

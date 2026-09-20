@@ -11,7 +11,9 @@
     "demo:agents": "tsx src/demo-agents.ts"
   },
   "dependencies": {
+    "@codefriends/core": "0.1.0",
     "@codefriends/shared": "0.1.0",
+    "@libsql/client": "^0.15.15",
     "better-sqlite3": "^11.10.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",

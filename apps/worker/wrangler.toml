@@ -1,0 +1,28 @@
+# Cloudflare Worker + D1 + Durable Object hub.
+# Replace database_id after: npx wrangler d1 create codefriends
+# This file has no secrets. Put tokens in `.dev.vars` (local) or `wrangler secret` (prod).
+
+name = "codefriends-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+CODEFRIENDS_DEV_LOGIN = "0"
+CODEFRIENDS_SEED = "1"
+CODEFRIENDS_MOCK_PROVIDERS = "0"
+CODEFRIENDS_DM_HISTORY_LIMIT = "200"
+# Set after the Vercel (or Pages) popout URL exists, then redeploy:
+# CODEFRIENDS_POPOUT_URL = "https://YOUR-POPOUT.vercel.app"
+# CODEFRIENDS_PUBLIC_URL = "https://codefriends-api.YOUR-SUBDOMAIN.workers.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "codefriends"
+database_id = "00000000-0000-0000-0000-000000000000"
+
+[durable_objects]
+bindings = [{ name = "HUB", class_name = "PresenceHub" }]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["PresenceHub"]
