@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "name": "codefriends-connect",
+            "type": "command",
+            "command": "node \"${extensionPath}${/}scripts${/}connect.mjs\" --provider gemini --hook gemini",
+            "description": "Opt-in CodeFriends connect prompt (not Gemini CLI login)"
+          }
+        ]
+      }
+    ]
+  }
+}

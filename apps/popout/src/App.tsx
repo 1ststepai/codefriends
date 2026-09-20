@@ -287,14 +287,15 @@ function Login({
   mockProviders: boolean;
 }) {
   const hinted = providerHint();
+  const genericHost = hinted === "generic";
   const [username, setUsername] = useState("maya");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
   const [mockSubject, setMockSubject] = useState("");
-  const [mockProvider, setMockProvider] = useState(hinted && hinted !== "dev" ? hinted : "cursor");
+  const [mockProvider, setMockProvider] = useState(hinted && hinted !== "dev" && hinted !== "generic" ? hinted : "cursor");
   const productProviders = providers.filter((p) => p.id !== "dev");
   const dev = providers.find((p) => p.id === "dev");
-  const showDev = !providers.length || dev?.availability === "dev";
+  const showDev = !providers.length || dev?.availability === "dev" || genericHost;
   const highlighted = productProviders.find((p) => p.id === hinted);
 
   return (
@@ -306,12 +307,21 @@ function Login({
         CodeFriends user can link several of those identities so the friends graph stays a single
         person.
       </p>
-      {highlighted ? (
+      {genericHost ? (
+        <p className="lede highlight">
+          Opened from a local / open-source editor (VS Code, VSCodium, Continue, Ollama GUI, Open
+          WebUI, SillyTavern, …). This is an opt-in to a <strong>CodeFriends</strong> identity — not
+          “login with Ollama” or any host SSO.
+        </p>
+      ) : highlighted ? (
         <p className="lede highlight">
           Opened from {highlighted.label}.{" "}
           {highlighted.availability === "live"
             ? `Continue with your ${highlighted.accountOf} account.`
-            : highlighted.blockedReason ?? "This provider’s official login is not publicly available yet."}
+            : highlighted.availability === "unconfigured"
+              ? highlighted.nextStep ??
+                `Sign in with Google in this popout once GEMINI_GOOGLE_* env is set. That is CodeFriends Gemini identity, not ${highlighted.label} CLI login.`
+              : highlighted.blockedReason ?? "This provider’s official login is not publicly available yet."}
         </p>
       ) : null}
       <div className="provider-grid">
@@ -753,7 +763,10 @@ function providerHint(): string | undefined {
 
 function clientHint(): string | undefined {
   const params = new URLSearchParams(window.location.search);
-  return params.get("client") ?? (params.get("provider") === "dev" ? "web" : params.get("provider") ?? undefined);
+  const provider = params.get("provider");
+  if (params.get("client")) return params.get("client") ?? undefined;
+  if (provider === "dev" || provider === "generic") return "web";
+  return provider ?? undefined;
 }
 
 function availabilityLabel(provider: AuthProviderInfo): string {

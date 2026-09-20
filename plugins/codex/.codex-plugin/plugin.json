@@ -1,0 +1,7 @@
+{
+  "name": "codefriends",
+  "version": "0.1.0",
+  "description": "Opt-in Connect CodeFriends? prompt for Codex. Opens the popout with ?provider=codex — not ChatGPT/Codex account login.",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

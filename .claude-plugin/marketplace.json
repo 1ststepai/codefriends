@@ -1,0 +1,17 @@
+{
+  "name": "codefriends",
+  "owner": {
+    "name": "CodeFriends"
+  },
+  "metadata": {
+    "description": "CodeFriends plugins for Claude Code. Opt-in popout connect — not Claude account login."
+  },
+  "plugins": [
+    {
+      "name": "codefriends",
+      "source": "./plugins/claude",
+      "description": "Connect CodeFriends? prompt + /codefriends commands",
+      "version": "0.1.0"
+    }
+  ]
+}
