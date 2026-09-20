@@ -1,10 +1,10 @@
 # CodeFriends
 
-Steam Friends–style social layer for people using **Cursor / Claude / Codex / Gemini**.
+Presence, friends, and DMs across coding tools — **Cursor / Claude / Codex / Gemini**.
 
 Friends list, online presence, status text, and click-to-DM — all in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM.
 
-> **Not affiliated with Cursor, Anthropic, OpenAI, or Google.** This is an independent community project. “Steam Friends–style” is a UX description, not a Steam or Valve product.
+> **Not affiliated with Cursor, Anthropic, OpenAI, or Google.** This is an independent community project.
 
 ## Architecture
 

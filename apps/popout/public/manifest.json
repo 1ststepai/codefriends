@@ -1,7 +1,7 @@
 {
   "name": "CodeFriends",
   "short_name": "CodeFriends",
-  "description": "Steam Friends–style presence and DMs for coding agents. Lightweight popout — not inside the IDE.",
+  "description": "Friends list, presence, and DMs for coding tools. Lightweight popout — not inside the IDE.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1e1e1e",

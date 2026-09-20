@@ -267,7 +267,7 @@ export function App() {
 
       {error ? <p className="banner">{error}</p> : null}
       <footer className="fineprint">
-        Steam Friends–style panel concept — not official. Not affiliated with Cursor, Anthropic, OpenAI, or Google.
+        CodeFriends overlay. Not affiliated with Cursor, Anthropic, OpenAI, or Google.
       </footer>
     </div>
   );
