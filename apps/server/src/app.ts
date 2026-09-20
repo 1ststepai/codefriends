@@ -1,4 +1,5 @@
 import { createServer, type Server } from "node:http";
+import { join } from "node:path";
 import cors from "cors";
 import express from "express";
 import { WebSocketServer } from "ws";
@@ -11,7 +12,7 @@ import {
   type RuntimeConfig,
   type SqlClient,
 } from "@codefriends/core";
-import { loadConfig, type ServerConfig } from "./config.js";
+import { isApiHttpPath, loadConfig, type ServerConfig } from "./config.js";
 import { openLibsql } from "./db/libsql.js";
 import { openBetterSqlite } from "./db/sqlite.js";
 import { expressToFetch, sendFetchResponse } from "./express-fetch.js";
@@ -53,6 +54,10 @@ export async function startServer(opts?: {
   app.use(cors());
   app.use(express.json({ limit: "32kb" }));
   app.use(async (req, res, next) => {
+    if (config.servePopout && !isApiHttpPath(req.path)) {
+      next();
+      return;
+    }
     try {
       const response = await handleHttp(expressToFetch(req), { store, config });
       await sendFetchResponse(res, response);
@@ -60,6 +65,21 @@ export async function startServer(opts?: {
       next(err);
     }
   });
+
+  if (config.servePopout) {
+    app.use(express.static(config.popoutDir, { fallthrough: true }));
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") {
+        next();
+        return;
+      }
+      if (isApiHttpPath(req.path) || req.path === "/ws") {
+        next();
+        return;
+      }
+      res.sendFile(join(config.popoutDir, "index.html"));
+    });
+  }
 
   const http = createServer(app);
   const wss = new WebSocketServer({ server: http, path: "/ws" });
