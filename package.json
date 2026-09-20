@@ -1,0 +1,27 @@
+{
+  "name": "codefriends",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Steam Friends–style presence + DM popout for people using Cursor, Claude, Codex, and Gemini.",
+  "license": "MIT",
+  "workspaces": [
+    "packages/shared",
+    "apps/server",
+    "apps/popout",
+    "extensions/cursor"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,popout -c cyan,magenta \"npm run dev -w @codefriends/server\" \"npm run dev -w @codefriends/popout\"",
+    "build": "npm run build -w @codefriends/shared && npm run build -w @codefriends/server && npm run build -w @codefriends/popout && npm run compile -w codefriends",
+    "smoke": "npm run smoke -w @codefriends/server",
+    "demo:agents": "npm run demo:agents -w @codefriends/server",
+    "lint": "npm run build -w @codefriends/shared && npm run build -w @codefriends/server && npm run compile -w codefriends"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
