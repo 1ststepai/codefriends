@@ -12,13 +12,17 @@
   },
   "dependencies": {
     "@codefriends/shared": "0.1.0",
+    "better-sqlite3": "^11.10.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
     "express": "^4.21.2",
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
+    "@types/node": "^22.13.10",
     "@types/ws": "^8.18.0",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2"

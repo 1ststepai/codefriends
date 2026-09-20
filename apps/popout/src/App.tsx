@@ -7,7 +7,8 @@ import type {
   WsServerMessage,
 } from "@codefriends/shared";
 import { CLIENTS, CLIENT_LABEL } from "@codefriends/shared";
-import { login, wsUrl } from "./api";
+import type { AuthProviderInfo } from "@codefriends/shared";
+import { fetchProviders, login, mockProviderLogin, redeemHandoff, wsUrl } from "./api";
 import { clearSession, loadSession, saveSession } from "./session";
 
 const AGENT_CLIENTS = new Set<ClientKind>(["cursor", "claude", "codex", "gemini"]);
@@ -24,7 +25,62 @@ export function App() {
   const [error, setError] = useState("");
   const [connected, setConnected] = useState(false);
   const [typingFrom, setTypingFrom] = useState<string | null>(null);
+  const [providers, setProviders] = useState<AuthProviderInfo[]>([]);
+  const [mockProviders, setMockProviders] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(() => hasAuthQuery());
   const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchProviders()
+      .then((catalog) => {
+        if (cancelled) return;
+        setProviders(catalog.providers);
+        setMockProviders(catalog.mockProviders);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Could not load sign-in options");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("error");
+    const handoff = params.get("handoff");
+    const rawToken = params.get("token");
+    if (err) setError(err);
+    if (!handoff && !rawToken) {
+      setBootstrapping(false);
+      return;
+    }
+    let cancelled = false;
+    const finish = () => {
+      if (!cancelled) setBootstrapping(false);
+      stripAuthQuery();
+    };
+    if (rawToken) {
+      setToken(rawToken);
+      finish();
+      return;
+    }
+    void redeemHandoff(handoff!, clientHint())
+      .then((session) => {
+        if (cancelled) return;
+        saveSession(session);
+        setToken(session.token);
+        setSelf(session.user);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not restore session");
+      })
+      .finally(finish);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -48,7 +104,10 @@ export function App() {
           setFriends(msg.friends);
         } else if (msg.type === "presence") {
           setFriends((cur) => cur.map((f) => (f.id === msg.user.id ? msg.user : f)));
-          setSelf((cur) => (cur && cur.id === msg.user.id ? msg.user : cur));
+          setSelf((cur) => {
+            if (!cur || cur.id !== msg.user.id) return cur;
+            return { ...msg.user, identities: msg.user.identities ?? cur.identities };
+          });
         } else if (msg.type === "dm") {
           setMessages((cur) =>
             cur.some((m) => m.id === msg.message.id) ? cur : [...cur, msg.message],
@@ -95,13 +154,30 @@ export function App() {
     [active, messages, self],
   );
 
+  if (bootstrapping) {
+    return (
+      <div className="shell login">
+        <div className="kicker">CodeFriends</div>
+        <h1>Opening your session…</h1>
+      </div>
+    );
+  }
+
   if (!token || !self) {
-    return <Login onError={setError} error={error} onReady={(t, u) => {
-      saveSession({ token: t, user: u });
-      setToken(t);
-      setSelf(u);
-      setError("");
-    }} />;
+    return (
+      <Login
+        onError={setError}
+        error={error}
+        providers={providers}
+        mockProviders={mockProviders}
+        onReady={(t, u) => {
+          saveSession({ token: t, user: u });
+          setToken(t);
+          setSelf(u);
+          setError("");
+        }}
+      />
+    );
   }
 
   return (
@@ -142,7 +218,14 @@ export function App() {
       <SelfBar
         self={self}
         connected={connected}
+        providers={providers}
+        token={token}
         onChange={(patch) => send({ type: "presence", ...patch })}
+        onLinked={(u) => {
+          setSelf(u);
+          saveSession({ token, user: u });
+        }}
+        onError={setError}
       />
 
       <section className="list">
@@ -194,60 +277,148 @@ function Login({
   error,
   onError,
   onReady,
+  providers,
+  mockProviders,
 }: {
   error: string;
   onError: (msg: string) => void;
   onReady: (token: string, user: PublicUser) => void;
+  providers: AuthProviderInfo[];
+  mockProviders: boolean;
 }) {
+  const hinted = providerHint();
   const [username, setUsername] = useState("maya");
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [mockSubject, setMockSubject] = useState("");
+  const [mockProvider, setMockProvider] = useState(hinted && hinted !== "dev" ? hinted : "cursor");
+  const productProviders = providers.filter((p) => p.id !== "dev");
+  const dev = providers.find((p) => p.id === "dev");
+  const showDev = !providers.length || dev?.availability === "dev";
+  const highlighted = productProviders.find((p) => p.id === hinted);
 
   return (
     <div className="shell login">
       <div className="kicker">CodeFriends</div>
       <h1>Drop in without burning IDE RAM</h1>
       <p className="lede">
-        Username auth for local demo — first login creates the account. Demo roster is already
-        friends: maya, devjay, sam, rio, alex, casey, taylor, jordan, parker.
+        Sign in with the same account you already use in Cursor, Claude, Codex, or Gemini. One
+        CodeFriends user can link several of those identities so the friends graph stays a single
+        person.
       </p>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          onError("");
-          try {
-            const session = await login(username, displayName || undefined);
-            onReady(session.token, session.user);
-          } catch (err) {
-            onError(err instanceof Error ? err.message : "Login failed");
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <label>
-          Username
-          <input
-            autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="maya"
-            autoComplete="username"
+      {highlighted ? (
+        <p className="lede highlight">
+          Opened from {highlighted.label}.{" "}
+          {highlighted.availability === "live"
+            ? `Continue with your ${highlighted.accountOf} account.`
+            : highlighted.blockedReason ?? "This provider’s official login is not publicly available yet."}
+        </p>
+      ) : null}
+      <div className="provider-grid">
+        {productProviders.map((provider) => (
+          <ProviderButton
+            key={provider.id}
+            provider={provider}
+            emphasized={provider.id === hinted}
+            disabled={busy}
+            onStart={() => {
+              if (provider.startPath) {
+                window.location.href = `${provider.startPath}?client=${encodeURIComponent(clientHint() ?? provider.id)}`;
+              }
+            }}
           />
-        </label>
-        <label>
-          Display name <span className="optional">optional</span>
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="same as username"
-          />
-        </label>
-        <button className="primary" disabled={busy} type="submit">
-          {busy ? "Connecting…" : "Open popout"}
-        </button>
-      </form>
+        ))}
+      </div>
+      {showDev ? (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            onError("");
+            try {
+              const session = await login(username, displayName || undefined, clientHint());
+              onReady(session.token, session.user);
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Login failed");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <p className="lede">
+            <strong>Local / smoke demo</strong> — username only, no password. Same roster as before:
+            maya, parker, and friends. Not used in production.
+          </p>
+          <label>
+            Username
+            <input
+              autoFocus
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="maya"
+              autoComplete="username"
+            />
+          </label>
+          <label>
+            Display name <span className="optional">optional</span>
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="same as username"
+            />
+          </label>
+          <button className="primary" disabled={busy} type="submit">
+            {busy ? "Connecting…" : "Open popout"}
+          </button>
+        </form>
+      ) : null}
+      {mockProviders ? (
+        <form
+          className="mock-form"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBusy(true);
+            onError("");
+            try {
+              const session = await mockProviderLogin(mockProvider, {
+                subject: mockSubject,
+                usernameHint: mockSubject,
+              });
+              onReady(session.token, session.user);
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Mock login failed");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <p className="lede">
+            <strong>Mock provider</strong> (CODEFRIENDS_MOCK_PROVIDERS=1) — exercises the identity
+            interface without a real OAuth app.
+          </p>
+          <label>
+            Provider
+            <select value={mockProvider} onChange={(e) => setMockProvider(e.target.value)}>
+              {productProviders.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Provider subject
+            <input
+              value={mockSubject}
+              onChange={(e) => setMockSubject(e.target.value)}
+              placeholder="stable-account-id"
+            />
+          </label>
+          <button className="ghost wide" disabled={busy} type="submit">
+            Continue with mock identity
+          </button>
+        </form>
+      ) : null}
       {error ? <p className="banner">{error}</p> : null}
       <footer className="fineprint">
         Not affiliated with Cursor, Anthropic, OpenAI, or Google.
@@ -256,14 +427,54 @@ function Login({
   );
 }
 
+function ProviderButton({
+  provider,
+  emphasized,
+  disabled,
+  onStart,
+}: {
+  provider: AuthProviderInfo;
+  emphasized?: boolean;
+  disabled?: boolean;
+  onStart: () => void;
+}) {
+  const canStart = provider.availability === "live" && Boolean(provider.startPath);
+  const title =
+    provider.availability === "live"
+      ? `Sign in with ${provider.label}`
+      : provider.availability === "unconfigured"
+        ? provider.nextStep ?? "Needs OAuth client env vars"
+        : provider.blockedReason ?? "Not available yet";
+  return (
+    <button
+      type="button"
+      className={`provider ${provider.id} ${emphasized ? "emphasized" : ""}`}
+      disabled={disabled || !canStart}
+      title={title}
+      onClick={onStart}
+    >
+      Continue with {provider.label}
+      <span className="provider-state">{availabilityLabel(provider)}</span>
+    </button>
+  );
+}
+
 function SelfBar({
   self,
   connected,
   onChange,
+  providers,
+  token,
+  onLinked,
+  onError,
 }: {
   self: PublicUser;
   connected: boolean;
   onChange: (patch: { status?: PresenceStatus; statusText?: string; client?: ClientKind }) => void;
+  providers: AuthProviderInfo[];
+  token: string;
+  onLinked: (user: PublicUser) => void;
+  onError: (msg: string) => void;
 }) {
   return (
     <div className="self">
@@ -296,7 +507,77 @@ function SelfBar({
           onChange={(e) => onChange({ statusText: e.target.value })}
           placeholder="What are you working on?"
         />
+        <LinkedAccounts
+          self={self}
+          providers={providers}
+          token={token}
+          onLinked={onLinked}
+          onError={onError}
+        />
       </div>
+    </div>
+  );
+}
+
+function LinkedAccounts({
+  self,
+  providers,
+  token,
+  onLinked,
+  onError,
+}: {
+  self: PublicUser;
+  providers: AuthProviderInfo[];
+  token: string;
+  onLinked: (user: PublicUser) => void;
+  onError: (msg: string) => void;
+}) {
+  const linked = new Set((self.identities ?? []).map((i) => i.provider));
+  const linkable = providers.filter((p) => p.id !== "dev");
+  return (
+    <div className="identities">
+      <span className="identity-label">Accounts</span>
+      <span className="identity-list">
+        {(self.identities ?? []).map((id) => (
+          <span key={id.provider} className={`badge ${id.provider === "dev" ? "web" : id.provider}`}>
+            {id.provider}
+          </span>
+        ))}
+      </span>
+      {linkable.map((provider) => {
+        if (linked.has(provider.id)) return null;
+        if (provider.availability === "live" && provider.startPath) {
+          return (
+            <a
+              key={provider.id}
+              className="link-account"
+              href={`${provider.startPath}?link=1&token=${encodeURIComponent(token)}&client=${encodeURIComponent(self.client)}`}
+            >
+              Link {provider.label}
+            </a>
+          );
+        }
+        return null;
+      })}
+      {providers.some((p) => p.availability === "mock") ? (
+        <button
+          type="button"
+          className="link-account"
+          onClick={async () => {
+            const provider = window.prompt("Provider to link (cursor, claude, codex, gemini)", "claude");
+            const subject = provider && window.prompt("Stable provider subject");
+            if (!provider || !subject) return;
+            try {
+              const session = await mockProviderLogin(provider, { subject }, token);
+              onLinked(session.user);
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Link failed");
+            }
+          }}
+        >
+          Link mock identity
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -451,4 +732,43 @@ function hashHue(name: string) {
 
 function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function hasAuthQuery(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  return Boolean(params.get("handoff") || params.get("token"));
+}
+
+function stripAuthQuery(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("handoff");
+  url.searchParams.delete("token");
+  url.searchParams.delete("error");
+  window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+}
+
+function providerHint(): string | undefined {
+  return new URLSearchParams(window.location.search).get("provider") ?? undefined;
+}
+
+function clientHint(): string | undefined {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("client") ?? (params.get("provider") === "dev" ? "web" : params.get("provider") ?? undefined);
+}
+
+function availabilityLabel(provider: AuthProviderInfo): string {
+  switch (provider.availability) {
+    case "live":
+      return "ready";
+    case "unconfigured":
+      return "needs Google OAuth env";
+    case "blocked":
+      return "blocked — no public OAuth";
+    case "mock":
+      return "mock only";
+    case "dev":
+      return "local demo";
+    default:
+      return provider.availability;
+  }
 }

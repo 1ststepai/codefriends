@@ -1,11 +1,7 @@
 import type { Express, Request, Response } from "express";
+import { attachAuth, bearer } from "./auth/http.js";
+import type { ServerConfig } from "./config.js";
 import type { Store } from "./store.js";
-
-function bearer(req: Request): string | undefined {
-  const header = req.header("authorization") ?? "";
-  const match = /^Bearer\s+(.+)$/i.exec(header);
-  return match?.[1];
-}
 
 function requireUser(store: Store, req: Request, res: Response) {
   const user = store.userByToken(bearer(req));
@@ -16,26 +12,26 @@ function requireUser(store: Store, req: Request, res: Response) {
   return user;
 }
 
-export function attachHttp(app: Express, store: Store): void {
+export function attachHttp(app: Express, store: Store, config: ServerConfig): void {
   app.get("/health", (_req, res) => {
-    res.json({ ok: true, name: "codefriends", onlineCount: store.onlineCount() });
+    res.json({
+      ok: true,
+      name: "codefriends",
+      onlineCount: store.onlineCount(),
+      store: "sqlite",
+    });
   });
 
-  app.post("/api/auth/login", (req, res) => {
-    try {
-      const username = String(req.body?.username ?? "");
-      const displayName = req.body?.displayName ? String(req.body.displayName) : undefined;
-      const { user, token } = store.login(username, displayName);
-      res.json({ token, user: store.toPublic(user) });
-    } catch (err) {
-      res.status(400).json({ error: err instanceof Error ? err.message : "Login failed" });
-    }
-  });
+  attachAuth(app, store, config);
 
   app.get("/api/me", (req, res) => {
     const user = requireUser(store, req, res);
     if (!user) return;
-    res.json({ user: store.toPublic(user), friends: store.friendList(user.id) });
+    res.json({
+      user: store.toPublic(user, { identities: true }),
+      friends: store.friendList(user.id),
+      identities: store.identitiesOf(user.id),
+    });
   });
 
   app.get("/api/friends", (req, res) => {
