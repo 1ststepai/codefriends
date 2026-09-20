@@ -1,7 +1,7 @@
 {
   "name": "codefriends",
   "displayName": "CodeFriends",
-  "description": "Thin status-bar badge that opens the CodeFriends popout. Chat stays outside the IDE.",
+  "description": "Thin status-bar badge plus an opt-in Connect CodeFriends? prompt. Chat stays outside the IDE — this is not Cursor account login.",
   "version": "0.1.0",
   "publisher": "codefriends",
   "license": "MIT",
@@ -53,13 +53,32 @@
           "default": 15000,
           "minimum": 3000,
           "description": "How often the status bar polls /api/presence."
+        },
+        "codefriends.provider": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "cursor",
+            "claude",
+            "codex",
+            "gemini",
+            "generic"
+          ],
+          "default": "auto",
+          "description": "Popout ?provider= hint. auto uses Cursor when the IDE is Cursor, otherwise generic (VSCodium / vanilla VS Code / Continue-style). generic is CodeFriends identity, not Ollama SSO."
+        },
+        "codefriends.connectPrompt": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the opt-in Connect CodeFriends? prompt on activate when no session is stored and the user has not chosen Don't ask again."
         }
       }
     }
   },
   "scripts": {
     "compile": "tsc -p tsconfig.json",
-    "watch": "tsc -p tsconfig.json --watch"
+    "watch": "tsc -p tsconfig.json --watch",
+    "test": "node --experimental-strip-types --test src/connectPrompt.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.13.10",

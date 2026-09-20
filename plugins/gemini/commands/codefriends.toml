@@ -1,0 +1,8 @@
+description = "Connect CodeFriends popout (opt-in; Sign in with Google happens in the popout, not Gemini CLI login)"
+prompt = """
+Run this exact shell command, then tell the user what happened:
+
+node ${extensionPath}/scripts/connect.mjs --provider gemini --action connect
+
+This opens the CodeFriends popout with ?provider=gemini. If Gemini/Google OAuth is configured on the CodeFriends server, they can Sign in with Google there. This command is not Gemini CLI authentication and does not replace `gemini` login.
+"""

@@ -1,0 +1,15 @@
+{
+  "name": "codefriends",
+  "displayName": "CodeFriends",
+  "version": "0.1.0",
+  "description": "Opt-in Connect CodeFriends? prompt for Claude Code. Opens the popout with ?provider=claude — not Claude account login.",
+  "author": {
+    "name": "CodeFriends"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codefriends",
+    "presence",
+    "friends"
+  ]
+}

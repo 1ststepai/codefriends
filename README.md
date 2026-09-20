@@ -24,8 +24,12 @@ IDE (thin)                         Outside the IDE
 | --- | --- |
 | `apps/server` | Multi-provider identity, friend graph, presence, 1:1 DMs over WebSocket |
 | `apps/popout` | Full dark UI (the thing in the concept mockup) |
-| `extensions/cursor` | Status bar + “Open popout” — **no chat webview** |
-| `packages/shared` | Shared TypeScript types and protocol |
+| `extensions/cursor` | VS Code-compatible status bar + opt-in **Connect CodeFriends?** prompt — **no chat webview** |
+| `plugins/claude` | Claude Code plugin: SessionStart prompt + `/codefriends` (`?provider=claude`) |
+| `plugins/codex` | Codex plugin: SessionStart prompt + skill (`?provider=codex`) |
+| `plugins/gemini` | Gemini CLI extension: SessionStart prompt + `/codefriends` (`?provider=gemini`) |
+| `packages/connect-client` | Tiny local companion CLI used by those plugins (also works for generic/Ollama GUIs) |
+| `packages/shared` | Shared TypeScript types, protocol, and connect-prompt policy |
 
 **Out of scope for this slice:** native Claude / Codex / Gemini extensions, voice, Live Share, payments, a public cloud deploy.
 
@@ -121,27 +125,64 @@ npm run demo:agents
 
 To install as a PWA, open the popout in Chrome / Edge and use **Install app** / **Add to dock**.
 
-### Cursor / VS Code extension
+### Cursor / VS Code extension (opt-in, not Cursor’s login screen)
 
 ```bash
 npm run compile -w codefriends
 ```
 
-Then in Cursor/VS Code: **Extensions → Install from Location…** and pick `extensions/cursor`.
+Then in Cursor, VS Code, or VSCodium: **Extensions → Install from Location…** and pick `extensions/cursor`.
 
-The status bar shows `CodeFriends · N online`. Click it, or run **CodeFriends: Open popout**. The extension opens `popoutUrl?provider=cursor&client=cursor`. If this editor already has a CodeFriends session (see **CodeFriends: Sign in with username (dev)**), it mints a short-lived **handoff** so the popout is already authenticated.
+This is an **extension** prompt. We cannot inject into Cursor’s native account login screen, and we do not claim Cursor SSO.
 
-Real “already signed in as your Cursor account” needs a public Cursor identity API (see table above). Until then the extension is a thin badge + URL opener, not a fake Cursor SSO.
+On activate (when there is no stored CodeFriends session), the extension shows **Connect CodeFriends?** with:
+
+| Action | What happens |
+| --- | --- |
+| **Connect** | Opens/focuses the popout (`?provider=cursor` in Cursor, or `?provider=generic` in VSCodium / vanilla VS Code) and session handoff if this editor already has a token |
+| **Not now** | Writes a 3-day snooze to extension `globalState`; asks again later |
+| **Don’t ask again** | Persists in `globalState`; never auto-prompts |
+
+If SecretStorage already has a CodeFriends token, the prompt is skipped. The status bar stays `CodeFriends · N online` (a quiet `$(check)` when connected). Click it, or run **CodeFriends: Open popout**.
 
 | Setting / command | Default / notes |
 | --- | --- |
 | `codefriends.popoutUrl` | `http://127.0.0.1:5173` |
 | `codefriends.serverUrl` | `http://127.0.0.1:8787` |
 | `codefriends.pollMs` | `15000` |
+| `codefriends.provider` | `auto` — Cursor app → `cursor`, otherwise `generic` |
+| `codefriends.connectPrompt` | `true` — set `false` to suppress the startup prompt |
 | **CodeFriends: Sign in with username (dev)** | Stores a token in SecretStorage; used only for the local demo |
 | **CodeFriends: Sign out of this editor** | Clears that token |
 
 The extension **does not** embed friends/chat in a webview.
+
+### Other hosts (same popout, thin plugins)
+
+Same UX idea: when someone is already in that app, ask if they also want CodeFriends. Social features stay in the popout + server.
+
+| Host | Install | Opens popout with | Identity it can actually do | What it cannot do |
+| --- | --- | --- | --- | --- |
+| **Cursor** | `extensions/cursor` | `?provider=cursor` | Extension opt-in + optional stored session handoff | Cursor account SSO |
+| **VS Code / VSCodium / Continue-style** | same `extensions/cursor` (`provider=generic`) | `?provider=generic` | CodeFriends identity (dev username / Gemini Google) | “Login with VS Code” |
+| **Claude Code** | `plugins/claude` (`claude plugin marketplace add` this repo, or `--plugin-dir plugins/claude`) | `?provider=claude` | SessionStart notice + `/codefriends` / `/codefriends-not-now` / `/codefriends-never` | Claude.ai / Claude Code OAuth |
+| **Codex** | `plugins/codex` (repo marketplace `.agents/plugins/marketplace.json`) | `?provider=codex` | SessionStart notice + `codefriends` skill | Sign in with ChatGPT (partner-only) |
+| **Gemini CLI** | `gemini extensions install ./plugins/gemini` | `?provider=gemini` | SessionStart notice + `/codefriends`; **Sign in with Google** in the popout when `GEMINI_GOOGLE_*` is set | Replacing Gemini CLI’s own login |
+| **Ollama / Open WebUI / SillyTavern / any GUI** | Browser popout, or the VS Code extension, or `node packages/connect-client/connect.mjs --provider generic --prompt` | `?provider=generic` (alias of local CodeFriends identity, not `dev` SSO) | Opt-in CodeFriends username / Google | **No** “login with Ollama.” Ollama has no account SSO |
+
+CLI plugins persist **Not now** / **Don’t ask again** per host in `~/.codefriends/connect-state.json`. A stored `sessionToken` there (or SecretStorage in the VS Code extension) skips the nag.
+
+```bash
+# Generic companion (also what the host plugins run)
+node packages/connect-client/connect.mjs --provider generic --prompt
+node packages/connect-client/connect.mjs --provider claude --action connect
+```
+
+Prompt-path checks (first run, dismiss, don’t ask again, already connected):
+
+```bash
+npm run test:connect
+```
 
 ## Smoke test
 
@@ -149,9 +190,12 @@ Proves two users can go online, exchange a 1:1 DM, **and that history is still t
 
 ```bash
 npm run smoke
+npm run test:connect
 ```
 
 Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked`
+
+`test:connect` prints the documented prompt paths (first run, Not now cooldown, Don’t ask again, already connected, host popout URLs).
 
 ## HTTP + WebSocket
 
@@ -179,8 +223,7 @@ Run `apps/server` on a single VM with a durable disk for the SQLite file (or set
 
 ## Next
 
-- Official Cursor / Claude / Codex identity programs → fill in the existing adapters
-- Thin native hooks for Claude / Codex / Gemini (same popout URL + handoff)
+- Official Cursor / Claude / Codex identity programs → fill in the existing adapters (thin connect prompts already open the popout)
 - Voice and Live Share-style pairing (not this slice)
 
 ## License

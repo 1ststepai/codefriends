@@ -1,0 +1,16 @@
+{
+  "description": "On a new Claude Code session, offer an opt-in CodeFriends connect prompt. Not Claude account SSO.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/connect.mjs\" --provider claude --hook claude"
+          }
+        ]
+      }
+    ]
+  }
+}

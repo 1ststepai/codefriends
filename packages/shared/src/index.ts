@@ -103,3 +103,16 @@ export function normalizeUsername(raw: string): string {
 export function isValidUsername(raw: string): boolean {
   return /^[a-z0-9][a-z0-9_-]{1,23}$/.test(normalizeUsername(raw));
 }
+
+export {
+  CONNECT_SNOOZE_MS,
+  CONNECT_HOSTS,
+  applyConnectChoice,
+  buildPopoutUrl,
+  decideConnectPrompt,
+  emptyConnectHostState,
+  hostLabel,
+  popoutClientFor,
+  resolveIdeProvider,
+} from "./connect-prompt.js";
+export type { ConnectChoice, ConnectDecision, ConnectHost, ConnectHostState } from "./connect-prompt.js";

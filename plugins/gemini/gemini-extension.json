@@ -1,0 +1,6 @@
+{
+  "name": "codefriends",
+  "version": "0.1.0",
+  "description": "Opt-in Connect CodeFriends? prompt for Gemini CLI. Opens the popout with ?provider=gemini so you can Sign in with Google there. This is not Gemini CLI login.",
+  "contextFileName": "GEMINI.md"
+}

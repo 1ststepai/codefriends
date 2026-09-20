@@ -1,0 +1,17 @@
+{
+  "name": "codefriends",
+  "interface": {
+    "displayName": "CodeFriends"
+  },
+  "plugins": [
+    {
+      "name": "codefriends",
+      "source": {
+        "path": "../../plugins/codex"
+      },
+      "interface": {
+        "displayName": "CodeFriends"
+      }
+    }
+  ]
+}
