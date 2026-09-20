@@ -2,7 +2,7 @@
   "name": "codefriends",
   "private": true,
   "version": "0.1.0",
-  "description": "Steam Friends–style presence + DM popout for people using Cursor, Claude, Codex, and Gemini.",
+  "description": "Presence, friends list, and DMs across coding tools — Cursor, Claude, Codex, and Gemini.",
   "license": "MIT",
   "workspaces": [
     "packages/shared",
