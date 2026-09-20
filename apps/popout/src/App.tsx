@@ -104,7 +104,10 @@ export function App() {
           setFriends(msg.friends);
         } else if (msg.type === "presence") {
           setFriends((cur) => cur.map((f) => (f.id === msg.user.id ? msg.user : f)));
-          setSelf((cur) => (cur && cur.id === msg.user.id ? msg.user : cur));
+          setSelf((cur) => {
+            if (!cur || cur.id !== msg.user.id) return cur;
+            return { ...msg.user, identities: msg.user.identities ?? cur.identities };
+          });
         } else if (msg.type === "dm") {
           setMessages((cur) =>
             cur.some((m) => m.id === msg.message.id) ? cur : [...cur, msg.message],
