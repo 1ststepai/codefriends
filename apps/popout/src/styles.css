@@ -367,6 +367,112 @@ h1 {
   gap: 10px;
 }
 
+.provider-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.provider {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: var(--elev);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.provider:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.provider.emphasized {
+  border-color: var(--accent);
+}
+
+.provider.cursor {
+  box-shadow: inset 3px 0 0 var(--cursor);
+}
+
+.provider.claude {
+  box-shadow: inset 3px 0 0 var(--claude);
+}
+
+.provider.codex {
+  box-shadow: inset 3px 0 0 var(--codex);
+}
+
+.provider.gemini {
+  box-shadow: inset 3px 0 0 var(--gemini);
+}
+
+.provider-state {
+  color: var(--soft);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.highlight {
+  padding: 8px 10px;
+  background: #1b1b1b;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.mock-form {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.mock-form select {
+  width: 100%;
+  background: #1b1b1b;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 9px;
+}
+
+.ghost.wide {
+  width: 100%;
+}
+
+.identities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.identity-label {
+  color: var(--soft);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.identity-list {
+  display: flex;
+  gap: 4px;
+}
+
+.link-account {
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  text-decoration: none;
+}
+
 .login label {
   display: grid;
   gap: 4px;

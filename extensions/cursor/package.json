@@ -25,6 +25,14 @@
       {
         "command": "codefriends.refreshPresence",
         "title": "CodeFriends: Refresh online count"
+      },
+      {
+        "command": "codefriends.devSignIn",
+        "title": "CodeFriends: Sign in with username (dev)"
+      },
+      {
+        "command": "codefriends.signOut",
+        "title": "CodeFriends: Sign out of this editor"
       }
     ],
     "configuration": {

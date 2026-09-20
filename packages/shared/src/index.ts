@@ -1,8 +1,33 @@
 export const CLIENTS = ["cursor", "claude", "codex", "gemini", "web"] as const;
 export type ClientKind = (typeof CLIENTS)[number];
 
+export const AUTH_PROVIDERS = ["cursor", "claude", "codex", "gemini", "dev"] as const;
+export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
+
 export const PRESENCE_STATUSES = ["available", "away", "offline"] as const;
 export type PresenceStatus = (typeof PRESENCE_STATUSES)[number];
+
+export type ProviderAvailability = "live" | "unconfigured" | "blocked" | "dev" | "mock";
+
+export interface LinkedIdentity {
+  provider: AuthProvider;
+  email?: string;
+  displayName?: string;
+}
+
+export interface AuthProviderInfo {
+  id: AuthProvider;
+  label: string;
+  /** Which product account this is meant to represent. */
+  accountOf: string;
+  availability: ProviderAvailability;
+  /** Relative URL to begin browser login, when the provider can start a flow. */
+  startPath?: string;
+  /** Honest reason the button cannot complete a real login yet. */
+  blockedReason?: string;
+  /** Exact next step if the implementation exists but needs credentials. */
+  nextStep?: string;
+}
 
 export interface PublicUser {
   id: string;
@@ -13,6 +38,7 @@ export interface PublicUser {
   client: ClientKind;
   online: boolean;
   lastSeen: number;
+  identities?: LinkedIdentity[];
 }
 
 export interface SessionUser extends PublicUser {

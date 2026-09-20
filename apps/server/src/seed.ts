@@ -53,26 +53,45 @@ const DEMO: Array<{
 ];
 
 export function seedDemo(store: Store): void {
-  const created = DEMO.map((row) =>
-    store.createUser({
+  const created = DEMO.map((row) => {
+    const existing = store.userByName(row.username);
+    if (existing) {
+      store.ensureIdentity(existing.id, {
+        provider: "dev",
+        subject: existing.username,
+        displayName: existing.displayName,
+        usernameHint: existing.username,
+      });
+      return existing;
+    }
+    const user = store.createUser({
       username: row.username,
       displayName: row.displayName,
       client: row.client,
       statusText: row.statusText,
       lastSeen: Date.now() - (row.lastSeenOffset ?? 0),
-    }),
-  );
+    });
+    store.ensureIdentity(user.id, {
+      provider: "dev",
+      subject: user.username,
+      displayName: user.displayName,
+      usernameHint: user.username,
+    });
+    return user;
+  });
 
   for (const a of created) {
     for (const b of created) {
-      if (a.id !== b.id) store.friends.get(a.id)!.add(b.id);
+      if (a.id !== b.id) store.addFriend(a.id, b.username);
     }
   }
 
   const maya = store.userByName("maya")!;
   const parker = store.userByName("parker")!;
-  store.addMessage(maya.id, parker.id, "Heyyyy, curious what you're working on.");
-  store.addMessage(maya.id, parker.id, "That refactor look interesting.");
+  if (!store.conversationHasMessages(maya.id, parker.id)) {
+    store.addMessage(maya.id, parker.id, "Heyyyy, curious what you're working on.");
+    store.addMessage(maya.id, parker.id, "That refactor look interesting.");
+  }
 }
 
 export const DEMO_USERNAMES = DEMO.map((d) => d.username);

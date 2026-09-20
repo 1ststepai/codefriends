@@ -12,16 +12,16 @@ export function sendToUser(store: Store, userId: string, payload: WsServerMessag
 }
 
 export function broadcastPresence(store: Store, userId: string): void {
-  const user = store.usersById.get(userId);
+  const user = store.getUser(userId);
   if (!user) return;
   const snapshot = store.toPublic(user);
   const payload: WsServerMessage = { type: "presence", user: snapshot };
   sendToUser(store, userId, payload);
-  for (const friendId of store.friends.get(userId) ?? []) {
+  for (const friendId of store.friendIds(userId)) {
     sendToUser(store, friendId, payload);
   }
   const count: WsServerMessage = { type: "online_count", count: store.onlineCount() };
-  for (const id of store.usersById.keys()) {
+  for (const id of store.allUserIds()) {
     sendToUser(store, id, count);
   }
 }

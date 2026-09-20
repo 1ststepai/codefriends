@@ -21,7 +21,7 @@ export function attachWs(wss: WebSocketServer, store: Store): void {
       store.attachSocket(user.id, socket);
       send(socket, {
         type: "hello_ok",
-        self: store.toPublic(user),
+        self: store.toPublic(user, { identities: true }),
         friends: store.friendList(user.id),
         messages: store.messagesFor(user.id),
       });
@@ -74,9 +74,12 @@ export function attachWs(wss: WebSocketServer, store: Store): void {
 function handle(store: Store, user: UserRecord, msg: WsClientMessage): void {
   switch (msg.type) {
     case "presence": {
-      if (msg.status) user.status = msg.status;
-      if (typeof msg.statusText === "string") user.statusText = msg.statusText.slice(0, 80);
-      if (msg.client) user.client = msg.client;
+      store.updatePresence(user.id, {
+        status: msg.status,
+        statusText: msg.statusText,
+        client: msg.client,
+      });
+      Object.assign(user, store.getUser(user.id));
       broadcastPresence(store, user.id);
       return;
     }
