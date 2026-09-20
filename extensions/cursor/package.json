@@ -1,0 +1,61 @@
+{
+  "name": "codefriends",
+  "displayName": "CodeFriends",
+  "description": "Thin status-bar badge that opens the CodeFriends popout. Chat stays outside the IDE.",
+  "version": "0.1.0",
+  "publisher": "codefriends",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codefriends.openPopout",
+        "title": "CodeFriends: Open popout"
+      },
+      {
+        "command": "codefriends.refreshPresence",
+        "title": "CodeFriends: Refresh online count"
+      }
+    ],
+    "configuration": {
+      "title": "CodeFriends",
+      "properties": {
+        "codefriends.popoutUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:5173",
+          "description": "URL of the lightweight CodeFriends popout (PWA / browser window). The extension does not embed chat."
+        },
+        "codefriends.serverUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8787",
+          "description": "CodeFriends API used only for the status-bar online count."
+        },
+        "codefriends.pollMs": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 3000,
+          "description": "How often the status bar polls /api/presence."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.8.2"
+  }
+}
