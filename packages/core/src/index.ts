@@ -4,6 +4,7 @@ export { seedDemo, DEMO_USERNAMES } from "./seed.js";
 export {
   defaultRuntimeConfig,
   clampHistoryLimit,
+  clampInviteTtl,
   parseHistoryLimit,
   parseCorsOrigins,
   isProductionEnv,

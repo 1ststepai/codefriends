@@ -3,6 +3,8 @@ import {
   DM_TEXT_MAX,
   isValidUsername,
   normalizeUsername,
+  parseInviteToken,
+  STATUS_TEXT_MAX,
   type AuthProvider,
   type ChatMessage,
   type ClientKind,
@@ -259,7 +261,7 @@ export class Store {
     const user = await this.getUser(userId);
     if (!user) throw new Error("Unknown user");
     if (patch.status) user.status = patch.status;
-    if (typeof patch.statusText === "string") user.statusText = patch.statusText.slice(0, 80);
+    if (typeof patch.statusText === "string") user.statusText = patch.statusText.slice(0, STATUS_TEXT_MAX);
     if (patch.client) user.client = patch.client;
     await this.persistUser(user);
     return user;
@@ -460,6 +462,39 @@ export class Store {
       linkUserId: row.link_user_id ?? undefined,
       client: row.client ?? undefined,
     };
+  }
+
+  async createInvite(userId: string): Promise<{ token: string; expiresAt: number }> {
+    const token = randomHex(12);
+    const now = Date.now();
+    const expiresAt = now + this.config.inviteTtlMs;
+    await this.db
+      .prepare("INSERT INTO invites (token_hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?)")
+      .run(await sha256Hex(token), userId, now, expiresAt);
+    return { token, expiresAt };
+  }
+
+  async peekInvite(rawToken: string): Promise<{ inviter: UserRecord; expiresAt: number } | undefined> {
+    const token = parseInviteToken(rawToken);
+    if (!token) return undefined;
+    const row = await this.db
+      .prepare(
+        `SELECT u.*, i.expires_at
+         FROM invites i
+         JOIN users u ON u.id = i.created_by
+         WHERE i.token_hash = ? AND i.expires_at > ?`,
+      )
+      .get<UserRow & { expires_at: number }>(await sha256Hex(token), Date.now());
+    if (!row) return undefined;
+    return { inviter: rowToUser(row), expiresAt: row.expires_at };
+  }
+
+  /** Instant bidirectional friend edge. Token stays valid until expiry (reusable). */
+  async acceptInvite(userId: string, rawToken: string): Promise<PublicUser> {
+    const peeked = await this.peekInvite(rawToken);
+    if (!peeked) throw new Error("Invite expired or not found");
+    if (peeked.inviter.id === userId) throw new Error("You cannot accept your own invite");
+    return this.addFriend(userId, peeked.inviter.username);
   }
 
   async createHandoff(userId: string): Promise<string> {

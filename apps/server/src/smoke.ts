@@ -257,6 +257,114 @@ async function historyCap(dbPath: string) {
   }
 }
 
+async function inviteAndStatus(dbPath: string) {
+  const server = await startServer({
+    port: 0,
+    seed: false,
+    dbPath,
+    config: { dbPath, devLogin: true, popoutUrl: "http://127.0.0.1:5173" },
+  });
+  try {
+    const kit = await login(server.url, "kit");
+    const jules = await login(server.url, "jules");
+    const nori = await login(server.url, "nori");
+
+    const created = await json<{ token: string; url: string }>(
+      await fetch(`${server.url}/api/invites`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${kit.token}` },
+      }),
+      "create invite",
+    );
+    assert.match(created.url, /[?&]invite=/);
+    assert.ok(created.token.length >= 16);
+
+    const peeked = await json<{ inviter: { username: string } }>(
+      await fetch(`${server.url}/api/invites/${created.token}`),
+      "peek invite",
+    );
+    assert.equal(peeked.inviter.username, "kit");
+
+    const own = await fetch(`${server.url}/api/invites/accept`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${kit.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ token: created.token }),
+    });
+    assert.equal(own.status, 400, "cannot accept your own invite");
+
+    const a = connect(server.url, kit.token);
+    const b = connect(server.url, jules.token);
+    await Promise.all([a.ready, b.ready]);
+    await a.waitFor("hello_ok");
+    await b.waitFor("hello_ok");
+
+    const accepted = await json<{ friend: { username: string }; friends: Array<{ username: string }> }>(
+      await fetch(`${server.url}/api/invites/accept`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${jules.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ token: created.url }),
+      }),
+      "accept invite",
+    );
+    assert.equal(accepted.friend.username, "kit");
+    assert.ok(accepted.friends.some((f) => f.username === "kit"));
+
+    const friendsPush = await a.waitFor("friends");
+    assert.equal(friendsPush.type, "friends");
+    if (friendsPush.type === "friends") {
+      assert.ok(friendsPush.friends.some((f) => f.username === "jules"));
+    }
+
+    const reused = await json<{ friend: { username: string } }>(
+      await fetch(`${server.url}/api/invites/accept`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${nori.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ token: created.token }),
+      }),
+      "reuse invite",
+    );
+    assert.equal(reused.friend.username, "kit");
+
+    const workingOn = `shipping invites ${Date.now()}`;
+    a.ws.send(JSON.stringify({ type: "presence", statusText: workingOn, client: "cursor" }));
+    const presence = await waitForMatch(b, (msg) => {
+      return msg.type === "presence" && msg.user.statusText === workingOn && msg.user.client === "cursor";
+    });
+    assert.equal(presence.type, "presence");
+
+    await server.store.db.prepare("UPDATE invites SET expires_at = 1").run();
+    const stale = await fetch(`${server.url}/api/invites/${created.token}`);
+    assert.equal(stale.status, 404, "expired invite must 404");
+
+    a.ws.close();
+    b.ws.close();
+  } finally {
+    await server.close();
+  }
+}
+
+async function waitForMatch(
+  client: ReturnType<typeof connect>,
+  match: (msg: WsServerMessage) => boolean,
+  timeoutMs = 3000,
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const msg = await client.next(deadline - Date.now());
+    if (match(msg)) return msg;
+  }
+  throw new Error("timed out waiting for matching WS message");
+}
+
 async function servePopout(dbPath: string) {
   const popoutDir = mkdtempSync(join(tmpdir(), "codefriends-popout-"));
   mkdirSync(join(popoutDir, "assets"), { recursive: true });
@@ -297,9 +405,10 @@ async function main() {
   const dir = mkdtempSync(join(tmpdir(), "codefriends-smoke-"));
   await persistAcrossRestart(join(dir, "persist.sqlite"));
   await historyCap(join(dir, "cap.sqlite"));
+  await inviteAndStatus(join(dir, "invite.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, popout static served",
   );
 }
 

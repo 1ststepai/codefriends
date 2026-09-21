@@ -1,5 +1,6 @@
 import type { AuthProvider, ClientKind } from "@codefriends/shared";
-import { AUTH_PROVIDERS } from "@codefriends/shared";
+import { AUTH_PROVIDERS, invitePopoutUrl } from "@codefriends/shared";
+import { broadcastPresence, pushFriends } from "./broadcast.js";
 import type { RuntimeConfig } from "./config.js";
 import { randomHex } from "./crypto.js";
 import { buildAdapters, describeProviders } from "./auth/providers.js";
@@ -255,6 +256,45 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
     } catch (err) {
       return json({ error: err instanceof Error ? err.message : "Could not add friend" }, 400);
     }
+  }
+
+  if (method === "POST" && path === "/api/invites") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    const created = await store.createInvite(user.id);
+    return json({
+      token: created.token,
+      url: invitePopoutUrl(config.popoutUrl, created.token),
+      path: `/invite/${created.token}`,
+      expiresAt: created.expiresAt,
+      expiresInMs: config.inviteTtlMs,
+    });
+  }
+
+  if (method === "POST" && path === "/api/invites/accept") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const friend = await store.acceptInvite(user.id, String(body.token ?? body.code ?? ""));
+      await pushFriends(store, user.id);
+      await pushFriends(store, friend.id);
+      await broadcastPresence(store, user.id);
+      await broadcastPresence(store, friend.id);
+      return json({ friend, friends: await store.friendList(user.id) });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not accept invite" }, 400);
+    }
+  }
+
+  const invitePeek = /^\/api\/invites\/([^/]+)$/.exec(path);
+  if (method === "GET" && invitePeek) {
+    const peeked = await store.peekInvite(decodeURIComponent(invitePeek[1]));
+    if (!peeked) return json({ error: "Invite expired or not found" }, 404);
+    return json({
+      inviter: await store.toPublic(peeked.inviter),
+      expiresAt: peeked.expiresAt,
+    });
   }
 
   if (method === "GET" && path === "/api/messages") {

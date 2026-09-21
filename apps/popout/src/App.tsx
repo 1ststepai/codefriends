@@ -6,10 +6,27 @@ import type {
   PublicUser,
   WsServerMessage,
 } from "@codefriends/shared";
-import { CLIENTS, CLIENT_LABEL } from "@codefriends/shared";
+import { CLIENTS, CLIENT_LABEL, parseInviteToken, STATUS_TEXT_MAX } from "@codefriends/shared";
 import type { AuthProviderInfo } from "@codefriends/shared";
-import { apiUrl, fetchProviders, login, mockProviderLogin, redeemHandoff, wsUrl } from "./api";
-import { clearSession, loadSession, saveSession } from "./session";
+import {
+  acceptInvite,
+  apiUrl,
+  createInvite,
+  fetchProviders,
+  login,
+  mockProviderLogin,
+  peekInvite,
+  redeemHandoff,
+  wsUrl,
+} from "./api";
+import {
+  clearPendingInvite,
+  clearSession,
+  loadPendingInvite,
+  loadSession,
+  savePendingInvite,
+  saveSession,
+} from "./session";
 
 const AGENT_CLIENTS = new Set<ClientKind>(["cursor", "claude", "codex", "gemini"]);
 
@@ -28,6 +45,9 @@ export function App() {
   const [providers, setProviders] = useState<AuthProviderInfo[]>([]);
   const [mockProviders, setMockProviders] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(() => hasAuthQuery());
+  const [pendingInvite, setPendingInvite] = useState(() => inviteFromLocation() || loadPendingInvite());
+  const [inviteFrom, setInviteFrom] = useState<PublicUser | null>(null);
+  const [wsReady, setWsReady] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -45,6 +65,56 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const fromUrl = inviteFromLocation();
+    if (fromUrl) {
+      savePendingInvite(fromUrl);
+      setPendingInvite(fromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pendingInvite) {
+      setInviteFrom(null);
+      return;
+    }
+    let cancelled = false;
+    peekInvite(pendingInvite)
+      .then((info) => {
+        if (!cancelled) setInviteFrom(info.inviter);
+      })
+      .catch(() => {
+        if (!cancelled) setInviteFrom(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingInvite]);
+
+  useEffect(() => {
+    if (!token || !pendingInvite || !wsReady) return;
+    let cancelled = false;
+    void acceptInvite(token, pendingInvite)
+      .then((result) => {
+        if (cancelled) return;
+        setFriends(result.friends);
+        setActiveId((cur) => cur ?? result.friend.id);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not accept invite");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        clearPendingInvite();
+        setPendingInvite("");
+        setInviteFrom(null);
+        stripInviteLocation();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, pendingInvite, wsReady]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -86,6 +156,7 @@ export function App() {
     if (!token) return;
     let cancelled = false;
     let retry: number | undefined;
+    setWsReady(false);
     const connect = () => {
       const ws = new WebSocket(wsUrl(token));
       wsRef.current = ws;
@@ -100,6 +171,7 @@ export function App() {
           setMessages(msg.messages);
           saveSession({ token, user: msg.self });
           setActiveId((cur) => cur ?? pickDefaultFriend(msg.friends, msg.messages, msg.self.id));
+          setWsReady(true);
         } else if (msg.type === "friends") {
           setFriends(msg.friends);
         } else if (msg.type === "presence") {
@@ -170,6 +242,7 @@ export function App() {
         error={error}
         providers={providers}
         mockProviders={mockProviders}
+        inviteFrom={inviteFrom}
         onReady={(t, u) => {
           saveSession({ token: t, user: u });
           setToken(t);
@@ -225,6 +298,7 @@ export function App() {
           setSelf(u);
           saveSession({ token, user: u });
         }}
+        onFriends={setFriends}
         onError={setError}
       />
 
@@ -267,7 +341,7 @@ export function App() {
 
       {error ? <p className="banner">{error}</p> : null}
       <footer className="fineprint">
-        CodeFriends overlay. Not affiliated with Cursor, Anthropic, OpenAI, or Google.
+        CodeFriends popout. Not affiliated with Cursor, Anthropic, OpenAI, or Google.
       </footer>
     </div>
   );
@@ -279,12 +353,14 @@ function Login({
   onReady,
   providers,
   mockProviders,
+  inviteFrom,
 }: {
   error: string;
   onError: (msg: string) => void;
   onReady: (token: string, user: PublicUser) => void;
   providers: AuthProviderInfo[];
   mockProviders: boolean;
+  inviteFrom: PublicUser | null;
 }) {
   const hinted = providerHint();
   const genericHost = hinted === "generic";
@@ -307,6 +383,12 @@ function Login({
         CodeFriends user can link several of those identities so the friends graph stays a single
         person.
       </p>
+      {inviteFrom ? (
+        <p className="lede highlight">
+          Invite from <strong>{inviteFrom.displayName}</strong> (@{inviteFrom.username}). Sign in and
+          you’ll be friends immediately — no request to approve.
+        </p>
+      ) : null}
       {genericHost ? (
         <p className="lede highlight">
           Opened from a local / open-source editor (VS Code, VSCodium, Continue, Ollama GUI, Open
@@ -476,6 +558,7 @@ function SelfBar({
   providers,
   token,
   onLinked,
+  onFriends,
   onError,
 }: {
   self: PublicUser;
@@ -484,6 +567,7 @@ function SelfBar({
   providers: AuthProviderInfo[];
   token: string;
   onLinked: (user: PublicUser) => void;
+  onFriends: (friends: PublicUser[]) => void;
   onError: (msg: string) => void;
 }) {
   return (
@@ -511,12 +595,17 @@ function SelfBar({
             ))}
           </select>
         </div>
-        <input
-          className="status-input"
-          value={self.statusText}
-          onChange={(e) => onChange({ statusText: e.target.value })}
-          placeholder="What are you working on?"
-        />
+        <label className="status-label">
+          Now working on
+          <input
+            className="status-input"
+            value={self.statusText}
+            maxLength={STATUS_TEXT_MAX}
+            onChange={(e) => onChange({ statusText: e.target.value })}
+            placeholder="a refactor, docs, pairing…"
+          />
+        </label>
+        <InviteBar token={token} onFriends={onFriends} onError={onError} />
         <LinkedAccounts
           self={self}
           providers={providers}
@@ -525,6 +614,90 @@ function SelfBar({
           onError={onError}
         />
       </div>
+    </div>
+  );
+}
+
+function InviteBar({
+  token,
+  onFriends,
+  onError,
+}: {
+  token: string;
+  onFriends: (friends: PublicUser[]) => void;
+  onError: (msg: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [paste, setPaste] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="invite">
+      <div className="invite-row">
+        <button
+          type="button"
+          className="ghost compact"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            onError("");
+            try {
+              const created = await createInvite(token);
+              setUrl(created.url);
+              const ok = await copyText(created.url);
+              setCopied(ok);
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not create invite");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Creating…" : "Create invite link"}
+        </button>
+        {url ? (
+          <button
+            type="button"
+            className="ghost compact"
+            onClick={async () => {
+              const ok = await copyText(url);
+              setCopied(ok);
+            }}
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        ) : null}
+      </div>
+      {url ? <input className="status-input" readOnly value={url} onFocus={(e) => e.target.select()} /> : null}
+      <form
+        className="invite-accept"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!paste.trim()) return;
+          setBusy(true);
+          onError("");
+          try {
+            const result = await acceptInvite(token, paste);
+            onFriends(result.friends);
+            setPaste("");
+          } catch (err) {
+            onError(err instanceof Error ? err.message : "Could not accept invite");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <input
+          value={paste}
+          onChange={(e) => setPaste(e.target.value)}
+          placeholder="Paste invite link or code"
+          autoComplete="off"
+        />
+        <button className="ghost compact" disabled={busy || !paste.trim()} type="submit">
+          Accept
+        </button>
+      </form>
     </div>
   );
 }
@@ -609,7 +782,7 @@ function FriendRow({
       <span className="meta">
         <span className="name-line">
           <strong>{friend.displayName}</strong>
-          {showClient ? <ClientBadge client={friend.client} /> : null}
+          {showClient || friend.online ? <ClientBadge client={friend.client} /> : null}
         </span>
         <span className="status">{friend.statusText || (friend.online ? "Available" : "Offline")}</span>
       </span>
@@ -742,6 +915,26 @@ function hashHue(name: string) {
 
 function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function inviteFromLocation(): string {
+  return parseInviteToken(window.location.href);
+}
+
+function stripInviteLocation(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("invite");
+  if (url.pathname.startsWith("/invite/")) url.pathname = "/";
+  window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function hasAuthQuery(): boolean {

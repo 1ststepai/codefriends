@@ -107,6 +107,31 @@ export function isValidUsername(raw: string): boolean {
 /** Last N text DMs kept per 1:1 thread. Older rows are pruned on write. */
 export const DM_HISTORY_LIMIT_DEFAULT = 200;
 export const DM_TEXT_MAX = 2000;
+export const STATUS_TEXT_MAX = 80;
+/** Reusable invite links expire after 7 days. */
+export const INVITE_TTL_MS_DEFAULT = 7 * 24 * 60 * 60 * 1000;
+
+/** Accept a raw token, `?invite=`, `/invite/code`, or a full popout URL. */
+export function parseInviteToken(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed, "https://invite.local");
+    const fromQuery = url.searchParams.get("invite")?.trim();
+    if (fromQuery) return fromQuery;
+    const fromPath = /\/invite\/([^/]+)$/.exec(url.pathname);
+    if (fromPath) return decodeURIComponent(fromPath[1]);
+  } catch {
+    /* not a URL */
+  }
+  return trimmed;
+}
+
+export function invitePopoutUrl(popoutUrl: string, token: string): string {
+  const url = new URL(popoutUrl);
+  url.searchParams.set("invite", token);
+  return url.toString();
+}
 
 export {
   CONNECT_SNOOZE_MS,
