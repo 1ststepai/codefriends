@@ -357,7 +357,7 @@ export function App() {
       <div className="shell login">
         <header className="login-brand">
           <span className="login-mark" aria-hidden="true">
-            <img src="/brand/logo-lockup.png" alt="" />
+            <img src="/brand/icon-192.png" alt="" />
           </span>
           <p className="login-wordmark">CodeFriends</p>
         </header>
@@ -683,7 +683,7 @@ function Login({
     <div className="shell login">
       <header className="login-brand">
         <span className="login-mark" aria-hidden="true">
-          <img src="/brand/logo-lockup.png" alt="" />
+          <img src="/brand/icon-192.png" alt="" />
         </span>
         <p className="login-wordmark">CodeFriends</p>
       </header>
