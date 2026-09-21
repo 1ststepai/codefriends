@@ -51,7 +51,7 @@ pub fn run() {
 fn create_main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let window = WebviewWindowBuilder::new(app, "main", webview_url())
         .title("CodeFriends")
-        .inner_size(440.0, 780.0)
+        .inner_size(960.0, 680.0)
         .min_inner_size(360.0, 520.0)
         .resizable(true)
         .decorations(true)
