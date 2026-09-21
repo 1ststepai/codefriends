@@ -139,4 +139,26 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       ALTER TABLE users ADD COLUMN tools TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    name: "005_school_board",
+    sql: `
+      CREATE TABLE IF NOT EXISTS topics (
+        id TEXT PRIMARY KEY,
+        author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS topics_created_at ON topics(created_at);
+
+      CREATE TABLE IF NOT EXISTS topic_replies (
+        id TEXT PRIMARY KEY,
+        topic_id TEXT NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+        author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        body TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS topic_replies_topic_created ON topic_replies(topic_id, created_at);
+    `,
+  },
 ];

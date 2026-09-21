@@ -323,6 +323,52 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
     });
   }
 
+  if (method === "GET" && path === "/api/topics") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    return json({ topics: await store.listTopics() });
+  }
+
+  if (method === "POST" && path === "/api/topics") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const topic = await store.createTopic(user.id, String(body.title ?? ""), String(body.body ?? ""));
+      return json({ topic });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not post topic" }, 400);
+    }
+  }
+
+  const topicReply = /^\/api\/topics\/([^/]+)\/replies$/.exec(path);
+  if (method === "POST" && topicReply) {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const reply = await store.addReply(
+        decodeURIComponent(topicReply[1]),
+        user.id,
+        String(body.body ?? ""),
+      );
+      const found = await store.getTopic(reply.topicId);
+      return json({ reply, topic: found?.topic, replies: found?.replies ?? [reply] });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not reply";
+      return json({ error: message }, message === "Topic not found" ? 404 : 400);
+    }
+  }
+
+  const topicOne = /^\/api\/topics\/([^/]+)$/.exec(path);
+  if (method === "GET" && topicOne) {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    const found = await store.getTopic(decodeURIComponent(topicOne[1]));
+    if (!found) return json({ error: "Topic not found" }, 404);
+    return json(found);
+  }
+
   if (method === "GET" && path === "/api/presence") {
     return json({
       onlineCount: await store.onlineCount(),

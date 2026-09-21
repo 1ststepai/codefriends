@@ -1,4 +1,4 @@
-import type { AuthProviderInfo, PublicUser } from "@codefriends/shared";
+import type { AuthProviderInfo, ForumReply, ForumTopic, PublicUser } from "@codefriends/shared";
 import { parseInviteToken } from "@codefriends/shared";
 import { apiUrl } from "./config";
 
@@ -103,6 +103,57 @@ export async function updateProfile(
   const data = (await res.json()) as { user?: PublicUser; error?: string };
   if (!res.ok || !data.user) throw new Error(data.error ?? "Could not update profile");
   return data.user;
+}
+
+export async function listTopics(token: string) {
+  const res = await fetch(apiUrl("/api/topics"), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { topics?: ForumTopic[]; error?: string };
+  if (!res.ok || !data.topics) throw new Error(data.error ?? "Could not load the school board");
+  return data.topics;
+}
+
+export async function createTopic(token: string, title: string, body: string) {
+  const res = await fetch(apiUrl("/api/topics"), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ title, body }),
+  });
+  const data = (await res.json()) as { topic?: ForumTopic; error?: string };
+  if (!res.ok || !data.topic) throw new Error(data.error ?? "Could not post to the board");
+  return data.topic;
+}
+
+export async function getTopic(token: string, id: string) {
+  const res = await fetch(apiUrl(`/api/topics/${encodeURIComponent(id)}`), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { topic?: ForumTopic; replies?: ForumReply[]; error?: string };
+  if (!res.ok || !data.topic) throw new Error(data.error ?? "Could not open that thread");
+  return { topic: data.topic, replies: data.replies ?? [] };
+}
+
+export async function addTopicReply(token: string, topicId: string, body: string) {
+  const res = await fetch(apiUrl(`/api/topics/${encodeURIComponent(topicId)}/replies`), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ body }),
+  });
+  const data = (await res.json()) as {
+    reply?: ForumReply;
+    topic?: ForumTopic;
+    replies?: ForumReply[];
+    error?: string;
+  };
+  if (!res.ok || !data.reply) throw new Error(data.error ?? "Could not reply");
+  return { reply: data.reply, topic: data.topic, replies: data.replies ?? [] };
 }
 
 export async function createHandoff(token: string) {

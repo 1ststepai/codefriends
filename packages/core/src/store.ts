@@ -6,10 +6,16 @@ import {
   normalizeUsername,
   parseInviteToken,
   parseTools,
+  REPLY_BODY_MAX,
   STATUS_TEXT_MAX,
+  TOPIC_BODY_MAX,
+  TOPIC_LIST_LIMIT,
+  TOPIC_TITLE_MAX,
   type AuthProvider,
   type ChatMessage,
   type ClientKind,
+  type ForumReply,
+  type ForumTopic,
   type LinkedIdentity,
   type PresenceStatus,
   type PublicUser,
@@ -431,6 +437,95 @@ export class Store {
     return Boolean(row);
   }
 
+  async createTopic(authorId: string, title: string, body: string): Promise<ForumTopic> {
+    const cleanedTitle = title.trim();
+    const cleanedBody = body.trim();
+    if (!cleanedTitle) throw new Error("Title cannot be empty");
+    if (!cleanedBody) throw new Error("Write a bit about what you are learning");
+    if (cleanedTitle.length > TOPIC_TITLE_MAX) throw new Error("Title is too long");
+    if (cleanedBody.length > TOPIC_BODY_MAX) throw new Error("Post is too long");
+    const author = await this.getUser(authorId);
+    if (!author) throw new Error("Unknown user");
+    const topic: ForumTopic = {
+      id: randomUUID(),
+      title: cleanedTitle,
+      body: cleanedBody,
+      authorId: author.id,
+      authorUsername: author.username,
+      authorDisplayName: author.displayName,
+      createdAt: Date.now(),
+      replyCount: 0,
+    };
+    await this.db
+      .prepare("INSERT INTO topics (id, author_id, title, body, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(topic.id, topic.authorId, topic.title, topic.body, topic.createdAt);
+    return topic;
+  }
+
+  async listTopics(limit = TOPIC_LIST_LIMIT): Promise<ForumTopic[]> {
+    const cap = Math.max(1, Math.min(limit, TOPIC_LIST_LIMIT));
+    const rows = await this.db
+      .prepare(
+        `SELECT t.id, t.author_id, t.title, t.body, t.created_at,
+                u.username, u.display_name,
+                (SELECT COUNT(*) FROM topic_replies r WHERE r.topic_id = t.id) as reply_count
+         FROM topics t
+         JOIN users u ON u.id = t.author_id
+         ORDER BY t.created_at DESC
+         LIMIT ?`,
+      )
+      .all<TopicRow>(cap);
+    return rows.map(rowToTopic);
+  }
+
+  async getTopic(id: string): Promise<{ topic: ForumTopic; replies: ForumReply[] } | undefined> {
+    const row = await this.db
+      .prepare(
+        `SELECT t.id, t.author_id, t.title, t.body, t.created_at,
+                u.username, u.display_name,
+                (SELECT COUNT(*) FROM topic_replies r WHERE r.topic_id = t.id) as reply_count
+         FROM topics t
+         JOIN users u ON u.id = t.author_id
+         WHERE t.id = ?`,
+      )
+      .get<TopicRow>(id);
+    if (!row) return undefined;
+    const replies = await this.db
+      .prepare(
+        `SELECT r.id, r.topic_id, r.body, r.author_id, r.created_at,
+                u.username, u.display_name
+         FROM topic_replies r
+         JOIN users u ON u.id = r.author_id
+         WHERE r.topic_id = ?
+         ORDER BY r.created_at ASC`,
+      )
+      .all<ReplyRow>(id);
+    return { topic: rowToTopic(row), replies: replies.map(rowToReply) };
+  }
+
+  async addReply(topicId: string, authorId: string, body: string): Promise<ForumReply> {
+    const cleaned = body.trim();
+    if (!cleaned) throw new Error("Reply cannot be empty");
+    if (cleaned.length > REPLY_BODY_MAX) throw new Error("Reply is too long");
+    const found = await this.getTopic(topicId);
+    if (!found) throw new Error("Topic not found");
+    const author = await this.getUser(authorId);
+    if (!author) throw new Error("Unknown user");
+    const reply: ForumReply = {
+      id: randomUUID(),
+      topicId,
+      body: cleaned,
+      authorId: author.id,
+      authorUsername: author.username,
+      authorDisplayName: author.displayName,
+      createdAt: Date.now(),
+    };
+    await this.db
+      .prepare("INSERT INTO topic_replies (id, topic_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(reply.id, reply.topicId, reply.authorId, reply.body, reply.createdAt);
+    return reply;
+  }
+
   async onlineUsers(): Promise<PublicUser[]> {
     const users: PublicUser[] = [];
     for (const id of await this.allUserIds()) {
@@ -568,6 +663,52 @@ export function lastSeenLabel(ts: number): string {
   if (delta < 86_400_000) return `last seen ${Math.round(delta / 3_600_000)}h ago`;
   if (delta < 172_800_000) return "last seen yesterday";
   return `last seen ${Math.round(delta / 86_400_000)}d ago`;
+}
+
+interface TopicRow {
+  id: string;
+  author_id: string;
+  title: string;
+  body: string;
+  created_at: number;
+  username: string;
+  display_name: string;
+  reply_count: number;
+}
+
+interface ReplyRow {
+  id: string;
+  topic_id: string;
+  body: string;
+  author_id: string;
+  created_at: number;
+  username: string;
+  display_name: string;
+}
+
+function rowToTopic(row: TopicRow): ForumTopic {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    authorId: row.author_id,
+    authorUsername: row.username,
+    authorDisplayName: row.display_name,
+    createdAt: Number(row.created_at),
+    replyCount: Number(row.reply_count ?? 0),
+  };
+}
+
+function rowToReply(row: ReplyRow): ForumReply {
+  return {
+    id: row.id,
+    topicId: row.topic_id,
+    body: row.body,
+    authorId: row.author_id,
+    authorUsername: row.username,
+    authorDisplayName: row.display_name,
+    createdAt: Number(row.created_at),
+  };
 }
 
 function rowToUser(row: UserRow): UserRecord {

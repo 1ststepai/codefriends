@@ -2,7 +2,7 @@
   "name": "codefriends",
   "private": true,
   "version": "0.1.0",
-  "description": "An AI coding school with your friends in the room — presence, DMs, and profiles across Cursor, Claude, Codex, and Gemini.",
+  "description": "An AI coding school with your friends in the room — presence, DMs, profiles, and a school board across Cursor, Claude, Codex, and Gemini.",
   "license": "MIT",
   "workspaces": [
     "packages/shared",
