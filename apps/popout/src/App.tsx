@@ -1781,9 +1781,7 @@ function HelpPacketPanel({
   return (
     <section className="dm">
       <header>
-        <span>
-          Help packet · <strong>{title.trim() || "New draft"}</strong>
-        </span>
+        <span>Help packet</span>
         <span className="status">You write it to share. They run agents on their account.</span>
       </header>
       <div className="thread">
