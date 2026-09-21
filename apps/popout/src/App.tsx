@@ -380,9 +380,10 @@ function Login({
       <div className="kicker">Learn together</div>
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
-        Presence, DMs, and a short profile — not a Discord-for-devs headline. Sign in with the same
-        account you already use in Cursor, Claude, Codex, or Gemini. One CodeFriends user can link
-        several of those identities so the friends graph stays a single person.
+        Learn with friends while you use Cursor, Claude, Codex, or Gemini. Presence, DMs, and a
+        short profile (GitHub / tools) now — prompt/knowledge base, learning paths, and threads
+        next. One CodeFriends user can link several of those identities so you stay a single person
+        in the room.
       </p>
       {inviteFrom ? (
         <p className="lede highlight">

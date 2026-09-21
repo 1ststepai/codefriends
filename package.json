@@ -2,7 +2,7 @@
   "name": "codefriends",
   "private": true,
   "version": "0.1.0",
-  "description": "Presence, friends list, and DMs across coding tools — Cursor, Claude, Codex, and Gemini.",
+  "description": "An AI coding school with your friends in the room — presence, DMs, and profiles across Cursor, Claude, Codex, and Gemini.",
   "license": "MIT",
   "workspaces": [
     "packages/shared",
