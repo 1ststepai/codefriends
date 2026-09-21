@@ -609,8 +609,21 @@ async function buildLibrary(dbPath: string) {
       "list official shelf as user B",
     );
     const official = listed.items.filter((item) => item.source === "official");
-    assert.ok(official.length >= 4, "official 1stStep starters must be seeded");
+    assert.ok(official.length >= 6, "official 1stStep shelf must include starters and free tools");
     assert.equal(official[0]?.url, "https://github.com/1ststepai/ai-user-starter-kit");
+    const officialUrls = official.map((item) => item.url);
+    for (const url of [
+      "https://github.com/1ststepai/ai-user-starter-kit",
+      "https://github.com/1ststepai/auto-model-router",
+      "https://github.com/1ststepai/codefriends",
+      "https://github.com/1ststepai/repo-next-steps",
+      "https://github.com/1ststepai/1ststep-os-audit",
+      "https://github.com/1ststepai/1ststep-os",
+    ]) {
+      assert.ok(officialUrls.includes(url), `official shelf missing ${url}`);
+    }
+    assert.ok(official.some((item) => item.title === "1stStep OS Audit"));
+    assert.ok(official.some((item) => item.title === "1stStep OS"));
     assert.ok(official.every((item) => item.authorUsername === "1ststep"));
     assert.ok(listed.items.every((item) => item.source === "official"));
 

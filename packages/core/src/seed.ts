@@ -101,7 +101,7 @@ export const DEMO_USERNAMES = DEMO.map((d) => d.username);
 
 export const OFFICIAL_LIBRARY_USERNAME = "1ststep";
 
-/** Verified public 1ststepai GitHub starters (2026-09-21). */
+/** Official 1stStep shelf. GitHub URLs are seeded even when a repo is private — self-hosted cohorts can open it. */
 const OFFICIAL_LIBRARY: Array<{
   title: string;
   description: string;
@@ -130,6 +130,18 @@ const OFFICIAL_LIBRARY: Array<{
     title: "Repo next steps",
     description: "Paste a public repo URL and get a plain-English checklist of what to do next.",
     url: "https://github.com/1ststepai/repo-next-steps",
+    kind: "github",
+  },
+  {
+    title: "1stStep OS Audit",
+    description: "Free offline audit of a project — evidence over docs, zero metered cost.",
+    url: "https://github.com/1ststepai/1ststep-os-audit",
+    kind: "github",
+  },
+  {
+    title: "1stStep OS",
+    description: "The 1stStep OS foundation is in progress. Self-hosted cohorts can open this repo to learn the system.",
+    url: "https://github.com/1ststepai/1ststep-os",
     kind: "github",
   },
 ];
