@@ -775,7 +775,6 @@ function Login({
           <label>
             Username
             <input
-              autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="maya"
