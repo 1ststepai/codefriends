@@ -203,7 +203,7 @@ npm run test:connect
 
 ## Smoke test
 
-Proves two users can go online, exchange a 1:1 DM, **and that history is still there after a server restart**. Also exercises mock provider linking, **invite accept** (reusable token → friend edge), **status-text broadcast**, **profile share**, **school board**, **build library** (official shelf + community add), and serving the built popout. Starts an ephemeral server with a temp SQLite file.
+Proves two users can go online, exchange a 1:1 DM, **and that history is still there after a server restart**. Also exercises mock provider linking, **invite accept** (reusable token → friend edge), **status-text broadcast**, **profile share** (including socials), **school board**, **build library** (official shelf + community add), and serving the built popout. Starts an ephemeral server with a temp SQLite file.
 
 ```bash
 npm run smoke
