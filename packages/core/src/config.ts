@@ -12,6 +12,14 @@ export interface RuntimeConfig {
   devLogin: boolean;
   /** Lets tests / local demos complete the provider interface without real OAuth apps. */
   mockProviders: boolean;
+  /**
+   * Return plaintext OTP / link codes in API JSON for local/dev.
+   * No SMS/email provider is wired — production must keep this off and plug a real sender.
+   */
+  otpMock: boolean;
+  otpTtlMs: number;
+  /** One-time codes that attach Cursor/Claude/Codex/Gemini identities without OAuth. */
+  linkCodeTtlMs: number;
   /** Last N 1:1 DMs kept per thread. */
   dmHistoryLimit: number;
   /** Reusable invite tokens expire after this many ms (default 7 days). */
@@ -36,6 +44,9 @@ export function defaultRuntimeConfig(partial?: Partial<RuntimeConfig>): RuntimeC
     oauthStateTtlMs: partial?.oauthStateTtlMs ?? 10 * 60 * 1000,
     devLogin: partial?.devLogin ?? true,
     mockProviders: partial?.mockProviders ?? false,
+    otpMock: partial?.otpMock ?? true,
+    otpTtlMs: partial?.otpTtlMs ?? 10 * 60 * 1000,
+    linkCodeTtlMs: partial?.linkCodeTtlMs ?? 10 * 60 * 1000,
     dmHistoryLimit: clampHistoryLimit(partial?.dmHistoryLimit ?? DM_HISTORY_LIMIT_DEFAULT),
     inviteTtlMs: clampInviteTtl(partial?.inviteTtlMs ?? INVITE_TTL_MS_DEFAULT),
     storeKind: partial?.storeKind ?? "sqlite",

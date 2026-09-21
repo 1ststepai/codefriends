@@ -70,6 +70,7 @@ export function loadConfig(
     popoutUrl: overrides?.popoutUrl ?? popoutUrl,
     devLogin,
     mockProviders: overrides?.mockProviders ?? process.env.CODEFRIENDS_MOCK_PROVIDERS === "1",
+    otpMock: overrides?.otpMock ?? process.env.CODEFRIENDS_OTP_MOCK !== "0",
     dmHistoryLimit: overrides?.dmHistoryLimit ?? parseHistoryLimit(process.env.CODEFRIENDS_DM_HISTORY_LIMIT),
     storeKind,
     corsOrigins: overrides?.corsOrigins ?? parseCorsOrigins(process.env.CODEFRIENDS_CORS_ORIGINS),

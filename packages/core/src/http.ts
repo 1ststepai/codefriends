@@ -283,7 +283,131 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
       user: await store.toPublic(user, { identities: true }),
       friends: await store.friendList(user.id),
       identities: await store.identitiesOf(user.id),
+      anchors: await store.anchorsOf(user.id),
+      friendRequests: await store.listFriendRequests(user.id),
     });
+  }
+
+  if (method === "POST" && path === "/api/auth/anchor/start") {
+    try {
+      const body = await readJson(request);
+      const started = await store.startAnchorOtp({
+        email: body.email ? String(body.email) : undefined,
+        phone: body.phone ? String(body.phone) : undefined,
+      });
+      return json(started);
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not start verification" }, 400);
+    }
+  }
+
+  if (method === "POST" && path === "/api/auth/anchor/verify") {
+    try {
+      const body = await readJson(request);
+      const { user, token, created } = await store.verifyAnchorOtp({
+        challengeId: String(body.challengeId ?? ""),
+        code: String(body.code ?? ""),
+        client: optionalClient(body.client),
+      });
+      return json({
+        token,
+        created,
+        user: await store.toPublic(user, { identities: true }),
+        anchors: await store.anchorsOf(user.id),
+      });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Verification failed" }, 400);
+    }
+  }
+
+  if (method === "POST" && path === "/api/me/anchor/start") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const started = await store.startAnchorOtp({
+        email: body.email ? String(body.email) : undefined,
+        phone: body.phone ? String(body.phone) : undefined,
+        userId: user.id,
+      });
+      return json(started);
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not start verification" }, 400);
+    }
+  }
+
+  if (method === "POST" && path === "/api/me/anchor/verify") {
+    const session = await store.userByToken(bearer(request));
+    if (!session) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const { user, token } = await store.verifyAnchorOtp({
+        challengeId: String(body.challengeId ?? ""),
+        code: String(body.code ?? ""),
+        client: optionalClient(body.client),
+        expectedUserId: session.id,
+      });
+      return json({
+        token,
+        user: await store.toPublic(user, { identities: true }),
+        anchors: await store.anchorsOf(user.id),
+      });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Verification failed" }, 400);
+    }
+  }
+
+  if (method === "POST" && path === "/api/identities/link/start") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const provider = parseProvider(String(body.provider ?? ""));
+      if (!provider) return json({ error: "Unknown provider" }, 400);
+      const started = await store.startIdentityLink(user.id, provider);
+      return json(started);
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not start link" }, 400);
+    }
+  }
+
+  if (method === "POST" && path === "/api/identities/link/complete") {
+    try {
+      const body = await readJson(request);
+      const provider = parseProvider(String(body.provider ?? ""));
+      if (!provider) return json({ error: "Unknown provider" }, 400);
+      const { user } = await store.completeIdentityLink({
+        code: String(body.code ?? ""),
+        provider,
+        subject: String(body.subject ?? ""),
+        email: body.email ? String(body.email) : undefined,
+        displayName: body.displayName ? String(body.displayName) : undefined,
+        client: optionalClient(body.client),
+      });
+      return json({
+        user: await store.toPublic(user, { identities: true }),
+        identities: await store.identitiesOf(user.id),
+      });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not complete link" }, 400);
+    }
+  }
+
+  const detachIdentity = /^\/api\/identities\/([^/]+)$/.exec(path);
+  if (method === "DELETE" && detachIdentity) {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    const provider = parseProvider(detachIdentity[1]);
+    if (!provider) return json({ error: "Unknown provider" }, 404);
+    try {
+      const identities = await store.detachIdentity(user.id, provider);
+      return json({
+        user: await store.toPublic(user, { identities: true }),
+        identities,
+      });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not detach" }, 400);
+    }
   }
 
   if (method === "GET" && path === "/api/friends") {
@@ -292,15 +416,63 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
     return json({ friends: await store.friendList(user.id) });
   }
 
+  if (method === "GET" && path === "/api/friends/requests") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    return json(await store.listFriendRequests(user.id));
+  }
+
   if (method === "POST" && path === "/api/friends") {
     const user = await store.userByToken(bearer(request));
     if (!user) return json({ error: "Sign in first" }, 401);
     try {
       const body = await readJson(request);
-      const friend = await store.addFriend(user.id, String(body.username ?? ""));
-      return json({ friend, friends: await store.friendList(user.id) });
+      const requestRow = await store.requestFriend(user.id, String(body.username ?? ""));
+      const friends = await store.friendList(user.id);
+      if (requestRow.status === "accepted") {
+        await pushFriends(store, requestRow.fromId);
+        await pushFriends(store, requestRow.toId);
+        await broadcastPresence(store, requestRow.fromId);
+        await broadcastPresence(store, requestRow.toId);
+      }
+      return json({
+        request: requestRow,
+        friend: requestRow.status === "accepted" ? (requestRow.fromId === user.id ? requestRow.to : requestRow.from) : undefined,
+        friends,
+        friendRequests: await store.listFriendRequests(user.id),
+      });
     } catch (err) {
-      return json({ error: err instanceof Error ? err.message : "Could not add friend" }, 400);
+      return json({ error: err instanceof Error ? err.message : "Could not send friend request" }, 400);
+    }
+  }
+
+  const friendRequestAction = /^\/api\/friends\/requests\/([^/]+)\/(accept|decline|cancel)$/.exec(path);
+  if (method === "POST" && friendRequestAction) {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    const requestId = decodeURIComponent(friendRequestAction[1]);
+    const action = friendRequestAction[2];
+    try {
+      if (action === "accept") {
+        const friend = await store.acceptFriendRequest(user.id, requestId);
+        await pushFriends(store, user.id);
+        await pushFriends(store, friend.id);
+        await broadcastPresence(store, user.id);
+        await broadcastPresence(store, friend.id);
+        return json({
+          friend,
+          friends: await store.friendList(user.id),
+          friendRequests: await store.listFriendRequests(user.id),
+        });
+      }
+      if (action === "decline") {
+        await store.declineFriendRequest(user.id, requestId);
+        return json({ ok: true, friendRequests: await store.listFriendRequests(user.id) });
+      }
+      await store.cancelFriendRequest(user.id, requestId);
+      return json({ ok: true, friendRequests: await store.listFriendRequests(user.id) });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not update request" }, 400);
     }
   }
 
@@ -473,6 +645,17 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
       onlineCount: await store.onlineCount(),
       online: await store.onlineUsers(),
     });
+  }
+
+  if (method === "GET" && path === "/api/presence/resolve") {
+    const provider = parseProvider(url.searchParams.get("provider") ?? "");
+    const subject = (url.searchParams.get("subject") ?? "").trim();
+    if (!provider || !subject) {
+      return json({ error: "Provide provider and subject query params" }, 400);
+    }
+    const user = await store.resolvePresenceByIdentity(provider, subject);
+    if (!user) return json({ error: "Identity not linked" }, 404);
+    return json({ user });
   }
 
   return json({ error: "Not found" }, 404);

@@ -25,6 +25,8 @@ import {
   type ClientKind,
   type ForumReply,
   type ForumTopic,
+  type FriendRequest,
+  type FriendRequestStatus,
   type HelpPacket,
   type LibraryItem,
   type LibraryKind,
@@ -32,6 +34,7 @@ import {
   type LinkedIdentity,
   type PresenceStatus,
   type PublicUser,
+  type VerificationMethod,
 } from "@codefriends/shared";
 import type { RuntimeConfig } from "./config.js";
 import { randomHex, randomUUID, sha256Hex } from "./crypto.js";
@@ -58,6 +61,8 @@ export interface UserRecord {
   ownsBusiness: boolean;
   businessNote: string;
   wantsToHelpOthersBuild: boolean;
+  anchorEmail?: string;
+  anchorPhone?: string;
   createdAt: number;
 }
 
@@ -80,8 +85,13 @@ interface UserRow {
   owns_business?: number;
   business_note?: string;
   wants_to_help_others_build?: number;
+  anchor_email?: string | null;
+  anchor_phone?: string | null;
   created_at: number;
 }
+
+const OTP_MAX_ATTEMPTS = 5;
+const LINKABLE_PROVIDERS = ["cursor", "claude", "codex", "gemini"] as const satisfies readonly AuthProvider[];
 
 export class Store {
   constructor(
@@ -124,6 +134,8 @@ export class Store {
       ownsBusiness: false,
       businessNote: "",
       wantsToHelpOthersBuild: false,
+      anchorEmail: undefined,
+      anchorPhone: undefined,
       createdAt: Date.now(),
     };
     await this.db
@@ -206,20 +218,39 @@ export class Store {
 
   async identitiesOf(userId: string): Promise<LinkedIdentity[]> {
     const rows = await this.db
-      .prepare("SELECT provider, email, display_name FROM identities WHERE user_id = ? ORDER BY created_at")
-      .all<{ provider: AuthProvider; email: string | null; display_name: string | null }>(userId);
+      .prepare(
+        `SELECT provider, email, display_name, verified_at, verification_method
+         FROM identities WHERE user_id = ? ORDER BY created_at`,
+      )
+      .all<{
+        provider: AuthProvider;
+        email: string | null;
+        display_name: string | null;
+        verified_at: number | null;
+        verification_method: VerificationMethod | null;
+      }>(userId);
     return rows.map((row) => ({
       provider: row.provider,
       email: row.email ?? undefined,
       displayName: row.display_name ?? undefined,
+      verifiedAt: row.verified_at ?? undefined,
+      verificationMethod: row.verification_method ?? undefined,
     }));
   }
 
-  async ensureIdentity(userId: string, profile: ProviderProfile): Promise<void> {
+  async ensureIdentity(
+    userId: string,
+    profile: ProviderProfile,
+    opts?: { verificationMethod?: VerificationMethod; verifiedAt?: number },
+  ): Promise<void> {
+    const now = Date.now();
+    const method = opts?.verificationMethod;
+    const verifiedAt = opts?.verifiedAt ?? (method ? now : undefined);
     await this.db
       .prepare(
-        `INSERT OR IGNORE INTO identities (id, user_id, provider, subject, email, display_name, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR IGNORE INTO identities
+           (id, user_id, provider, subject, email, display_name, created_at, verified_at, verification_method)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         randomUUID(),
@@ -228,8 +259,47 @@ export class Store {
         profile.subject,
         profile.email ?? null,
         profile.displayName ?? null,
-        Date.now(),
+        now,
+        verifiedAt ?? null,
+        method ?? null,
       );
+    if (method && verifiedAt) {
+      await this.db
+        .prepare(
+          `UPDATE identities
+           SET verified_at = COALESCE(verified_at, ?),
+               verification_method = COALESCE(verification_method, ?),
+               email = COALESCE(?, email),
+               display_name = COALESCE(?, display_name)
+           WHERE user_id = ? AND provider = ? AND subject = ?`,
+        )
+        .run(
+          verifiedAt,
+          method,
+          profile.email ?? null,
+          profile.displayName ?? null,
+          userId,
+          profile.provider,
+          profile.subject,
+        );
+    }
+  }
+
+  async detachIdentity(userId: string, provider: AuthProvider): Promise<LinkedIdentity[]> {
+    if (provider === "dev") throw new Error("Dev identity cannot be detached");
+    const existing = await this.identitiesOf(userId);
+    if (!existing.some((row) => row.provider === provider)) {
+      throw new Error(`No ${provider} identity linked`);
+    }
+    const user = await this.getUser(userId);
+    const remaining = existing.filter((row) => row.provider !== provider);
+    if (remaining.length === 0 && !user?.anchorEmail && !user?.anchorPhone) {
+      throw new Error("Keep at least one linked tool identity or an email/phone anchor");
+    }
+    await this.db
+      .prepare("DELETE FROM identities WHERE user_id = ? AND provider = ?")
+      .run(userId, provider);
+    return this.identitiesOf(userId);
   }
 
   async login(
@@ -248,12 +318,16 @@ export class Store {
       if (client) user.client = client;
       await this.persistUser(user);
     }
-    await this.ensureIdentity(user.id, {
-      provider: "dev",
-      subject: user.username,
-      displayName: user.displayName,
-      usernameHint: user.username,
-    });
+    await this.ensureIdentity(
+      user.id,
+      {
+        provider: "dev",
+        subject: user.username,
+        displayName: user.displayName,
+        usernameHint: user.username,
+      },
+      { verificationMethod: "dev" },
+    );
     return { user, token: await this.issueToken(user.id) };
   }
 
@@ -263,10 +337,17 @@ export class Store {
    */
   async loginWithIdentity(
     profile: ProviderProfile,
-    opts?: { linkUserId?: string; client?: ClientKind },
+    opts?: {
+      linkUserId?: string;
+      client?: ClientKind;
+      verificationMethod?: VerificationMethod;
+    },
   ): Promise<{ user: UserRecord; token: string; linked: boolean }> {
     if (!profile.subject?.trim()) throw new Error("Provider subject is required");
     const existing = await this.identityOwner(profile.provider, profile.subject);
+    const method =
+      opts?.verificationMethod ??
+      (profile.provider === "gemini" ? "oidc" : this.config.mockProviders ? "mock" : undefined);
 
     if (opts?.linkUserId) {
       const target = await this.getUser(opts.linkUserId);
@@ -274,7 +355,7 @@ export class Store {
       if (existing && existing.id !== target.id) {
         throw new Error(`That ${profile.provider} account is already linked to @${existing.username}`);
       }
-      await this.ensureIdentity(target.id, profile);
+      await this.ensureIdentity(target.id, profile, method ? { verificationMethod: method } : undefined);
       if (opts.client) {
         target.client = opts.client;
         await this.persistUser(target);
@@ -287,6 +368,9 @@ export class Store {
         existing.client = opts.client;
         await this.persistUser(existing);
       }
+      if (method) {
+        await this.ensureIdentity(existing.id, profile, { verificationMethod: method });
+      }
       return { user: existing, token: await this.issueToken(existing.id), linked: false };
     }
 
@@ -295,7 +379,7 @@ export class Store {
       displayName: profile.displayName || profile.email || usernameHint(profile),
       client: opts?.client ?? clientForProvider(profile.provider),
     });
-    await this.ensureIdentity(user.id, profile);
+    await this.ensureIdentity(user.id, profile, method ? { verificationMethod: method } : undefined);
     return { user, token: await this.issueToken(user.id), linked: false };
   }
 
@@ -391,7 +475,7 @@ export class Store {
     return n;
   }
 
-  async toPublic(user: UserRecord, opts?: { identities?: boolean }): Promise<PublicUser> {
+  async toPublic(user: UserRecord, opts?: { identities?: boolean; self?: boolean }): Promise<PublicUser> {
     const online = await this.isOnline(user.id);
     return {
       id: user.id,
@@ -430,18 +514,153 @@ export class Store {
     });
   }
 
+  /** Instant mutual friendship (invite accept + seed). Prefer requestFriend for username adds. */
   async addFriend(fromId: string, username: string): Promise<PublicUser> {
     const target = await this.userByName(username);
     if (!target) throw new Error("No user with that username");
     if (target.id === fromId) throw new Error("You cannot add yourself");
+    await this.connectFriends(fromId, target.id);
+    return this.toPublic(target);
+  }
+
+  async connectFriends(a: string, b: string): Promise<void> {
     const now = Date.now();
     await this.db
       .prepare("INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)")
-      .run(fromId, target.id, now);
+      .run(a, b, now);
     await this.db
       .prepare("INSERT OR IGNORE INTO friends (user_id, friend_id, created_at) VALUES (?, ?, ?)")
-      .run(target.id, fromId, now);
-    return this.toPublic(target);
+      .run(b, a, now);
+    await this.db
+      .prepare(
+        `UPDATE friend_requests
+         SET status = 'accepted', responded_at = ?
+         WHERE status = 'pending'
+           AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))`,
+      )
+      .run(now, a, b, b, a);
+  }
+
+  async requestFriend(fromId: string, username: string): Promise<FriendRequest> {
+    const target = await this.userByName(username);
+    if (!target) throw new Error("No user with that username");
+    if (target.id === fromId) throw new Error("You cannot add yourself");
+    if (await this.areFriends(fromId, target.id)) {
+      throw new Error("You are already friends");
+    }
+
+    const reverse = await this.db
+      .prepare(
+        `SELECT id FROM friend_requests
+         WHERE from_id = ? AND to_id = ? AND status = 'pending'`,
+      )
+      .get<{ id: string }>(target.id, fromId);
+    if (reverse) {
+      await this.acceptFriendRequest(fromId, reverse.id);
+      const accepted = await this.getFriendRequest(reverse.id);
+      if (!accepted) throw new Error("Friend request missing after accept");
+      return this.hydrateFriendRequest(accepted);
+    }
+
+    const existing = await this.db
+      .prepare(`SELECT id, status FROM friend_requests WHERE from_id = ? AND to_id = ?`)
+      .get<{ id: string; status: FriendRequestStatus }>(fromId, target.id);
+    if (existing?.status === "pending") {
+      const pending = await this.getFriendRequest(existing.id);
+      if (!pending) throw new Error("Friend request missing");
+      return this.hydrateFriendRequest(pending);
+    }
+
+    const id = randomUUID();
+    const now = Date.now();
+    if (existing) {
+      await this.db
+        .prepare(
+          `UPDATE friend_requests SET status = 'pending', created_at = ?, responded_at = NULL WHERE id = ?`,
+        )
+        .run(now, existing.id);
+      const refreshed = await this.getFriendRequest(existing.id);
+      if (!refreshed) throw new Error("Friend request missing");
+      return this.hydrateFriendRequest(refreshed);
+    }
+
+    await this.db
+      .prepare(
+        `INSERT INTO friend_requests (id, from_id, to_id, status, created_at, responded_at)
+         VALUES (?, ?, ?, 'pending', ?, NULL)`,
+      )
+      .run(id, fromId, target.id, now);
+    const created = await this.getFriendRequest(id);
+    if (!created) throw new Error("Friend request missing");
+    return this.hydrateFriendRequest(created);
+  }
+
+  async listFriendRequests(userId: string): Promise<{ incoming: FriendRequest[]; outgoing: FriendRequest[] }> {
+    const rows = await this.db
+      .prepare(
+        `SELECT id, from_id, to_id, status, created_at, responded_at
+         FROM friend_requests
+         WHERE status = 'pending' AND (from_id = ? OR to_id = ?)
+         ORDER BY created_at DESC`,
+      )
+      .all<FriendRequestRow>(userId, userId);
+    const incoming: FriendRequest[] = [];
+    const outgoing: FriendRequest[] = [];
+    for (const row of rows) {
+      const req = await this.hydrateFriendRequest(row);
+      if (row.to_id === userId) incoming.push(req);
+      else outgoing.push(req);
+    }
+    return { incoming, outgoing };
+  }
+
+  async acceptFriendRequest(userId: string, requestId: string): Promise<PublicUser> {
+    const row = await this.getFriendRequest(requestId);
+    if (!row || row.status !== "pending") throw new Error("Friend request not found");
+    if (row.to_id !== userId) throw new Error("Only the recipient can accept");
+    await this.connectFriends(row.from_id, row.to_id);
+    const from = await this.getUser(row.from_id);
+    if (!from) throw new Error("User not found");
+    return this.toPublic(from);
+  }
+
+  async declineFriendRequest(userId: string, requestId: string): Promise<void> {
+    const row = await this.getFriendRequest(requestId);
+    if (!row || row.status !== "pending") throw new Error("Friend request not found");
+    if (row.to_id !== userId) throw new Error("Only the recipient can decline");
+    await this.db
+      .prepare(`UPDATE friend_requests SET status = 'declined', responded_at = ? WHERE id = ?`)
+      .run(Date.now(), requestId);
+  }
+
+  async cancelFriendRequest(userId: string, requestId: string): Promise<void> {
+    const row = await this.getFriendRequest(requestId);
+    if (!row || row.status !== "pending") throw new Error("Friend request not found");
+    if (row.from_id !== userId) throw new Error("Only the sender can cancel");
+    await this.db.prepare(`DELETE FROM friend_requests WHERE id = ?`).run(requestId);
+  }
+
+  private async getFriendRequest(id: string): Promise<FriendRequestRow | undefined> {
+    return this.db
+      .prepare(
+        `SELECT id, from_id, to_id, status, created_at, responded_at FROM friend_requests WHERE id = ?`,
+      )
+      .get<FriendRequestRow>(id);
+  }
+
+  private async hydrateFriendRequest(row: FriendRequestRow): Promise<FriendRequest> {
+    const from = await this.getUser(row.from_id);
+    const to = await this.getUser(row.to_id);
+    return {
+      id: row.id,
+      fromId: row.from_id,
+      toId: row.to_id,
+      status: row.status,
+      createdAt: Number(row.created_at),
+      respondedAt: row.responded_at == null ? undefined : Number(row.responded_at),
+      from: from ? await this.toPublic(from) : undefined,
+      to: to ? await this.toPublic(to) : undefined,
+    };
   }
 
   async areFriends(a: string, b: string): Promise<boolean> {
@@ -845,6 +1064,236 @@ export class Store {
     return this.addFriend(userId, peeked.inviter.username);
   }
 
+  /**
+   * Start email or phone OTP for login / account create, or to attach an anchor while signed in.
+   * Delivery is mock/log only until an SMS/email provider is wired (see docs/identity-friends.md).
+   */
+  async startAnchorOtp(input: {
+    email?: string;
+    phone?: string;
+    userId?: string;
+  }): Promise<{ challengeId: string; kind: "email" | "phone"; expiresInMs: number; mockCode?: string }> {
+    const email = input.email ? normalizeEmail(input.email) : "";
+    const phone = input.phone ? normalizePhone(input.phone) : "";
+    if (email && phone) throw new Error("Provide email or phone, not both");
+    if (!email && !phone) throw new Error("Provide an email or phone number");
+    const kind = email ? "email" : "phone";
+    const destination = email || phone;
+    if (kind === "email" && !isValidEmail(destination)) throw new Error("Enter a valid email");
+    if (kind === "phone" && !isValidPhone(destination)) throw new Error("Enter a valid phone (8–15 digits)");
+
+    if (input.userId) {
+      const taken = await this.userByAnchor(kind, destination);
+      if (taken && taken.id !== input.userId) {
+        throw new Error(`That ${kind} is already the anchor for @${taken.username}`);
+      }
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const challengeId = randomUUID();
+    const now = Date.now();
+    await this.db
+      .prepare(
+        `INSERT INTO otp_challenges
+           (id, kind, destination, code_hash, purpose, user_id, created_at, expires_at, attempts)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .run(
+        challengeId,
+        kind,
+        destination,
+        await sha256Hex(code),
+        input.userId ? "anchor_verify" : "anchor_login",
+        input.userId ?? null,
+        now,
+        now + this.config.otpTtlMs,
+      );
+    return {
+      challengeId,
+      kind,
+      expiresInMs: this.config.otpTtlMs,
+      ...(this.config.otpMock ? { mockCode: code } : {}),
+    };
+  }
+
+  async verifyAnchorOtp(input: {
+    challengeId: string;
+    code: string;
+    client?: ClientKind;
+    expectedUserId?: string;
+  }): Promise<{ user: UserRecord; token: string; created: boolean }> {
+    const row = await this.db
+      .prepare(
+        `SELECT * FROM otp_challenges WHERE id = ? AND expires_at > ?`,
+      )
+      .get<{
+        id: string;
+        kind: "email" | "phone";
+        destination: string;
+        code_hash: string;
+        purpose: string;
+        user_id: string | null;
+        attempts: number;
+      }>(input.challengeId, Date.now());
+    if (!row) throw new Error("Code expired or not found");
+    if (input.expectedUserId && row.user_id !== input.expectedUserId) {
+      throw new Error("Anchor challenge belongs to a different session");
+    }
+    if (row.attempts >= OTP_MAX_ATTEMPTS) {
+      await this.db.prepare("DELETE FROM otp_challenges WHERE id = ?").run(row.id);
+      throw new Error("Too many attempts — request a new code");
+    }
+    const ok = (await sha256Hex(String(input.code ?? "").trim())) === row.code_hash;
+    if (!ok) {
+      await this.db
+        .prepare("UPDATE otp_challenges SET attempts = attempts + 1 WHERE id = ?")
+        .run(row.id);
+      throw new Error("Incorrect code");
+    }
+    await this.db.prepare("DELETE FROM otp_challenges WHERE id = ?").run(row.id);
+
+    if (row.purpose === "anchor_verify" && row.user_id) {
+      const user = await this.getUser(row.user_id);
+      if (!user) throw new Error("Session expired — sign in again");
+      await this.setAnchor(user.id, row.kind, row.destination);
+      const refreshed = (await this.getUser(user.id))!;
+      if (input.client) {
+        refreshed.client = input.client;
+        await this.persistUser(refreshed);
+      }
+      return { user: refreshed, token: await this.issueToken(refreshed.id), created: false };
+    }
+
+    let user = await this.userByAnchor(row.kind, row.destination);
+    let created = false;
+    if (!user) {
+      const hint =
+        row.kind === "email"
+          ? row.destination.split("@")[0] ?? "user"
+          : `p${row.destination.slice(-4)}`;
+      user = await this.createUser({
+        username: await this.uniqueUsername(hint),
+        displayName: row.kind === "email" ? row.destination.split("@")[0] : `User ${row.destination.slice(-4)}`,
+        client: input.client ?? "web",
+      });
+      created = true;
+    } else if (input.client) {
+      user.client = input.client;
+      await this.persistUser(user);
+    }
+    await this.setAnchor(user.id, row.kind, row.destination);
+    return { user: (await this.getUser(user.id))!, token: await this.issueToken(user.id), created };
+  }
+
+  async userByAnchor(kind: "email" | "phone", destination: string): Promise<UserRecord | undefined> {
+    const column = kind === "email" ? "anchor_email" : "anchor_phone";
+    const row = await this.db
+      .prepare(`SELECT * FROM users WHERE ${column} = ?`)
+      .get<UserRow>(destination);
+    return row ? rowToUser(row) : undefined;
+  }
+
+  async setAnchor(userId: string, kind: "email" | "phone", destination: string): Promise<void> {
+    const taken = await this.userByAnchor(kind, destination);
+    if (taken && taken.id !== userId) {
+      throw new Error(`That ${kind} is already the anchor for @${taken.username}`);
+    }
+    if (kind === "email") {
+      await this.db.prepare("UPDATE users SET anchor_email = ? WHERE id = ?").run(destination, userId);
+    } else {
+      await this.db.prepare("UPDATE users SET anchor_phone = ? WHERE id = ?").run(destination, userId);
+    }
+  }
+
+  async anchorsOf(userId: string): Promise<{ email?: string; phone?: string }> {
+    const user = await this.getUser(userId);
+    return {
+      email: user?.anchorEmail,
+      phone: user?.anchorPhone,
+    };
+  }
+
+  /**
+   * One-time code the signed-in user shows to a local plugin / connect-client.
+   * Completing it attaches a verified tool identity — not OAuth.
+   */
+  async startIdentityLink(
+    userId: string,
+    provider: AuthProvider,
+  ): Promise<{ code: string; provider: AuthProvider; expiresInMs: number }> {
+    if (!LINKABLE_PROVIDERS.includes(provider as (typeof LINKABLE_PROVIDERS)[number])) {
+      throw new Error("Only cursor, claude, codex, or gemini can be linked this way");
+    }
+    const code = randomHex(12);
+    const now = Date.now();
+    await this.db
+      .prepare(
+        `INSERT INTO identity_link_codes (code_hash, user_id, provider, created_at, expires_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(await sha256Hex(code), userId, provider, now, now + this.config.linkCodeTtlMs);
+    return { code, provider, expiresInMs: this.config.linkCodeTtlMs };
+  }
+
+  async completeIdentityLink(input: {
+    code: string;
+    provider: AuthProvider;
+    subject: string;
+    email?: string;
+    displayName?: string;
+    client?: ClientKind;
+  }): Promise<{ user: UserRecord; linked: true }> {
+    if (!input.subject?.trim()) throw new Error("subject is required — a stable local account id");
+    if (!LINKABLE_PROVIDERS.includes(input.provider as (typeof LINKABLE_PROVIDERS)[number])) {
+      throw new Error("Unknown linkable provider");
+    }
+    const row = await this.db
+      .prepare(
+        `SELECT user_id, provider FROM identity_link_codes
+         WHERE code_hash = ? AND expires_at > ?`,
+      )
+      .get<{ user_id: string; provider: AuthProvider }>(await sha256Hex(input.code.trim()), Date.now());
+    if (!row) throw new Error("Link code expired or already used");
+    if (row.provider !== input.provider) {
+      throw new Error(`This code is for ${row.provider}, not ${input.provider}`);
+    }
+    await this.db
+      .prepare("DELETE FROM identity_link_codes WHERE code_hash = ?")
+      .run(await sha256Hex(input.code.trim()));
+
+    const target = await this.getUser(row.user_id);
+    if (!target) throw new Error("User not found");
+    const owner = await this.identityOwner(input.provider, input.subject.trim());
+    if (owner && owner.id !== target.id) {
+      throw new Error(`That ${input.provider} account is already linked to @${owner.username}`);
+    }
+    await this.ensureIdentity(
+      target.id,
+      {
+        provider: input.provider,
+        subject: input.subject.trim(),
+        email: input.email,
+        displayName: input.displayName,
+      },
+      { verificationMethod: "link_code" },
+    );
+    if (input.client) {
+      target.client = input.client;
+      await this.persistUser(target);
+    }
+    return { user: (await this.getUser(target.id))!, linked: true };
+  }
+
+  /** Resolve a tool identity to the unified CodeFriends user + presence. */
+  async resolvePresenceByIdentity(
+    provider: AuthProvider,
+    subject: string,
+  ): Promise<PublicUser | undefined> {
+    const owner = await this.identityOwner(provider, subject);
+    if (!owner) return undefined;
+    return this.toPublic(owner, { identities: true });
+  }
+
   async createHandoff(userId: string): Promise<string> {
     const code = randomHex(24);
     const now = Date.now();
@@ -1003,8 +1452,39 @@ function rowToUser(row: UserRow): UserRecord {
     ownsBusiness: Boolean(row.owns_business),
     businessNote: row.business_note ?? "",
     wantsToHelpOthersBuild: Boolean(row.wants_to_help_others_build),
+    anchorEmail: row.anchor_email ?? undefined,
+    anchorPhone: row.anchor_phone ?? undefined,
     createdAt: row.created_at,
   };
+}
+
+interface FriendRequestRow {
+  id: string;
+  from_id: string;
+  to_id: string;
+  status: FriendRequestStatus;
+  created_at: number;
+  responded_at: number | null;
+}
+
+function normalizeEmail(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+function normalizePhone(raw: string): string {
+  const trimmed = raw.trim();
+  const plus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/[^\d]/g, "");
+  return plus ? `+${digits}` : digits;
+}
+
+function isValidEmail(raw: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) && raw.length <= 254;
+}
+
+function isValidPhone(raw: string): boolean {
+  const digits = raw.replace(/[^\d]/g, "");
+  return digits.length >= 8 && digits.length <= 15;
 }
 
 function cleanNote(raw: string): string {

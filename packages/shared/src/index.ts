@@ -9,11 +9,20 @@ export type PresenceStatus = (typeof PRESENCE_STATUSES)[number];
 
 export type ProviderAvailability = "live" | "unconfigured" | "blocked" | "dev" | "mock";
 
+export const VERIFICATION_METHODS = ["oidc", "link_code", "mock", "dev", "anchor"] as const;
+export type VerificationMethod = (typeof VERIFICATION_METHODS)[number];
+
 export interface LinkedIdentity {
   provider: AuthProvider;
   email?: string;
   displayName?: string;
+  /** When set, the link completed an honest verification path (see docs/identity-friends.md). */
+  verifiedAt?: number;
+  verificationMethod?: VerificationMethod;
 }
+
+export const FRIEND_REQUEST_STATUSES = ["pending", "accepted", "declined"] as const;
+export type FriendRequestStatus = (typeof FRIEND_REQUEST_STATUSES)[number];
 
 export interface AuthProviderInfo {
   id: AuthProvider;
@@ -50,6 +59,17 @@ export interface PublicUser {
   businessNote: string;
   wantsToHelpOthersBuild: boolean;
   identities?: LinkedIdentity[];
+}
+
+export interface FriendRequest {
+  id: string;
+  fromId: string;
+  toId: string;
+  status: FriendRequestStatus;
+  createdAt: number;
+  respondedAt?: number;
+  from?: PublicUser;
+  to?: PublicUser;
 }
 
 export interface SessionUser extends PublicUser {
