@@ -128,8 +128,15 @@ export async function createTopic(token: string, title: string, body: string) {
   return data.topic;
 }
 
+function topicPathId(id: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("Could not open that thread");
+  }
+  return id;
+}
+
 export async function getTopic(token: string, id: string) {
-  const res = await fetch(apiUrl(`/api/topics/${encodeURIComponent(id)}`), {
+  const res = await fetch(apiUrl(`/api/topics/${topicPathId(id)}`), {
     headers: { authorization: `Bearer ${token}` },
   });
   const data = (await res.json()) as { topic?: ForumTopic; replies?: ForumReply[]; error?: string };
@@ -138,7 +145,7 @@ export async function getTopic(token: string, id: string) {
 }
 
 export async function addTopicReply(token: string, topicId: string, body: string) {
-  const res = await fetch(apiUrl(`/api/topics/${encodeURIComponent(topicId)}/replies`), {
+  const res = await fetch(apiUrl(`/api/topics/${topicPathId(topicId)}/replies`), {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,

@@ -1077,14 +1077,14 @@ function TopicList({
   onOpen,
   onPosted,
   onError,
-}: {
+}: Readonly<{
   token: string;
   topics: ForumTopic[];
   activeId: string | null;
   onOpen: (id: string) => void;
   onPosted: (topic: ForumTopic) => void;
   onError: (msg: string) => void;
-}) {
+}>) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -1156,13 +1156,13 @@ function BoardPanel({
   replies,
   onReplied,
   onError,
-}: {
+}: Readonly<{
   token: string;
   topic: ForumTopic | null;
   replies: ForumReply[];
   onReplied: (topic: ForumTopic, replies: ForumReply[]) => void;
   onError: (msg: string) => void;
-}) {
+}>) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
