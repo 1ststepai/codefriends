@@ -1,4 +1,4 @@
-import type { AuthProviderInfo, ForumReply, ForumTopic, LibraryItem, PublicUser } from "@codefriends/shared";
+import type { AuthProviderInfo, ForumReply, ForumTopic, LaunchPack, LibraryItem, PublicUser } from "@codefriends/shared";
 import { parseInviteToken } from "@codefriends/shared";
 import { apiUrl } from "./config";
 
@@ -183,15 +183,39 @@ export async function addLibraryItem(
 }
 
 export async function deleteLibraryItem(token: string, id: string) {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    throw new Error("Could not remove that item");
-  }
-  const res = await fetch(apiUrl(`/api/library/${id}`), {
+  const res = await fetch(apiUrl(`/api/library/${libraryPathId(id)}`), {
     method: "DELETE",
     headers: { authorization: `Bearer ${token}` },
   });
   const data = (await res.json()) as { ok?: boolean; error?: string };
   if (!res.ok) throw new Error(data.error ?? "Could not remove that item");
+}
+
+export async function getLaunchPack(token: string, id: string): Promise<LaunchPack | null> {
+  const res = await fetch(apiUrl(`/api/library/${libraryPathId(id)}/launch-pack`), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { pack?: LaunchPack; error?: string };
+  if (res.status === 404) return null;
+  if (!res.ok || !data.pack) throw new Error(data.error ?? "Could not load launch pack");
+  return data.pack;
+}
+
+export async function createLaunchPack(token: string, id: string): Promise<LaunchPack> {
+  const res = await fetch(apiUrl(`/api/library/${libraryPathId(id)}/launch-pack`), {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { pack?: LaunchPack; error?: string };
+  if (!res.ok || !data.pack) throw new Error(data.error ?? "Could not generate launch pack");
+  return data.pack;
+}
+
+function libraryPathId(id: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("Could not open that library item");
+  }
+  return id;
 }
 
 export async function addTopicReply(token: string, topicId: string, body: string) {

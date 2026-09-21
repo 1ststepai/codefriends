@@ -4,12 +4,14 @@ import type {
   ClientKind,
   ForumReply,
   ForumTopic,
+  LaunchPack,
   LibraryItem,
   PresenceStatus,
   PublicUser,
   WsServerMessage,
 } from "@codefriends/shared";
 import {
+  canDraftLaunchPack,
   CLIENTS,
   CLIENT_LABEL,
   LIBRARY_DESCRIPTION_MAX,
@@ -29,9 +31,11 @@ import {
   addTopicReply,
   apiUrl,
   createInvite,
+  createLaunchPack,
   createTopic,
   deleteLibraryItem,
   fetchProviders,
+  getLaunchPack,
   getTopic,
   listLibrary,
   listTopics,
@@ -469,6 +473,7 @@ export function App() {
       ) : (
         <LibraryList
           token={token}
+          selfId={self.id}
           items={filteredLibrary}
           activeId={openLibraryId}
           onError={setError}
@@ -1414,6 +1419,7 @@ function BoardPanel({
 
 function LibraryList({
   token,
+  selfId,
   items,
   activeId,
   onOpen,
@@ -1421,6 +1427,7 @@ function LibraryList({
   onError,
 }: Readonly<{
   token: string;
+  selfId: string;
   items: LibraryItem[];
   activeId: string | null;
   onOpen: (id: string) => void;
@@ -1454,7 +1461,13 @@ function LibraryList({
       </div>
       <SectionTitle label="1stStep shelf" count={official.length} />
       {official.map((item) => (
-        <LibraryCard key={item.id} item={item} active={item.id === activeId} onOpen={() => onOpen(item.id)} />
+        <LibraryCard
+          key={item.id}
+          item={item}
+          active={item.id === activeId}
+          canShip={canDraftLaunchPack(item, selfId)}
+          onOpen={() => onOpen(item.id)}
+        />
       ))}
       <form
         className="board-compose"
@@ -1514,7 +1527,13 @@ function LibraryList({
       </form>
       <SectionTitle label="From the cohort" count={community.length} />
       {community.map((item) => (
-        <LibraryCard key={item.id} item={item} active={item.id === activeId} onOpen={() => onOpen(item.id)} />
+        <LibraryCard
+          key={item.id}
+          item={item}
+          active={item.id === activeId}
+          canShip={canDraftLaunchPack(item, selfId)}
+          onOpen={() => onOpen(item.id)}
+        />
       ))}
     </section>
   );
@@ -1523,25 +1542,30 @@ function LibraryList({
 function LibraryCard({
   item,
   active,
+  canShip,
   onOpen,
 }: {
   item: LibraryItem;
   active: boolean;
+  canShip: boolean;
   onOpen: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={`library-card ${item.source} ${active ? "active" : ""}`}
-      onClick={onOpen}
-    >
-      <span className="name-line">
-        <strong>{item.title}</strong>
-        {item.source === "official" ? <span className="badge official">1stStep</span> : null}
-        <span className="badge">{LIBRARY_KIND_LABEL[item.kind]}</span>
-      </span>
-      <span className="status">{item.description}</span>
-    </button>
+    <article className={`library-card ${item.source} ${active ? "active" : ""}`}>
+      <button type="button" className="library-card-main" onClick={onOpen}>
+        <span className="name-line">
+          <strong>{item.title}</strong>
+          {item.source === "official" ? <span className="badge official">1stStep</span> : null}
+          <span className="badge">{LIBRARY_KIND_LABEL[item.kind]}</span>
+        </span>
+        <span className="status">{item.description}</span>
+      </button>
+      {canShip ? (
+        <button type="button" className="ghost compact" onClick={onOpen}>
+          Help me ship this
+        </button>
+      ) : null}
+    </article>
   );
 }
 
@@ -1559,6 +1583,29 @@ function LibraryPanel({
   onError: (msg: string) => void;
 }>) {
   const [busy, setBusy] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
+  const [drafts, setDrafts] = useState<LaunchDrafts | null>(null);
+  const canShip = item ? canDraftLaunchPack(item, selfId) : false;
+
+  useEffect(() => {
+    if (!item || !canShip) {
+      setDrafts(null);
+      return;
+    }
+    setDrafts(null);
+    let cancelled = false;
+    getLaunchPack(token, item.id)
+      .then((pack) => {
+        if (!cancelled) setDrafts(pack ? launchDrafts(pack) : null);
+      })
+      .catch((err) => {
+        if (!cancelled) onError(err instanceof Error ? err.message : "Could not load launch pack");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, item?.id, canShip]);
+
   if (!item) {
     return (
       <section className="dm empty">
@@ -1585,6 +1632,24 @@ function LibraryPanel({
         <a className="primary library-open" href={item.url} target="_blank" rel="noreferrer">
           Open {item.source === "official" ? "starter" : "link"}
         </a>
+        {canShip ? (
+          <LaunchPackPanel
+            drafts={drafts}
+            busy={packBusy}
+            onChange={setDrafts}
+            onGenerate={async () => {
+              setPackBusy(true);
+              onError("");
+              try {
+                setDrafts(launchDrafts(await createLaunchPack(token, item.id)));
+              } catch (err) {
+                onError(err instanceof Error ? err.message : "Could not generate launch pack");
+              } finally {
+                setPackBusy(false);
+              }
+            }}
+          />
+        ) : null}
         {own ? (
           <button
             className="ghost compact"
@@ -1608,6 +1673,136 @@ function LibraryPanel({
         ) : null}
       </div>
     </section>
+  );
+}
+
+type LaunchDrafts = Pick<
+  LaunchPack,
+  "showHnTitle" | "showHnBody" | "redditTitle" | "redditBody" | "socialShort" | "socialLong" | "friendBlurb"
+>;
+
+function launchDrafts(pack: LaunchPack): LaunchDrafts {
+  return {
+    showHnTitle: pack.showHnTitle,
+    showHnBody: pack.showHnBody,
+    redditTitle: pack.redditTitle,
+    redditBody: pack.redditBody,
+    socialShort: pack.socialShort,
+    socialLong: pack.socialLong,
+    friendBlurb: pack.friendBlurb,
+  };
+}
+
+function LaunchPackPanel({
+  drafts,
+  busy,
+  onChange,
+  onGenerate,
+}: {
+  drafts: LaunchDrafts | null;
+  busy: boolean;
+  onChange: (next: LaunchDrafts) => void;
+  onGenerate: () => void;
+}) {
+  return (
+    <div className="launch-pack">
+      <p className="lede">
+        <strong>Launch pack</strong> — drafts only, you post when ready. Education-first copy to paste on Show HN,
+        Reddit, or a short social. CodeFriends does not post for you.
+      </p>
+      {!drafts ? (
+        <button className="ghost compact" type="button" disabled={busy} onClick={onGenerate}>
+          {busy ? "Drafting…" : "Generate launch pack"}
+        </button>
+      ) : (
+        <>
+          <CopyField
+            label="Show HN title"
+            value={drafts.showHnTitle}
+            rows={2}
+            onChange={(showHnTitle) => onChange({ ...drafts, showHnTitle })}
+          />
+          <CopyField
+            label="Show HN body"
+            value={drafts.showHnBody}
+            rows={6}
+            onChange={(showHnBody) => onChange({ ...drafts, showHnBody })}
+          />
+          <CopyField
+            label="Reddit title"
+            hint="Generic r/SideProject, r/ChatGPT, or r/LocalLLaMA style — match sub rules when you post"
+            value={drafts.redditTitle}
+            rows={2}
+            onChange={(redditTitle) => onChange({ ...drafts, redditTitle })}
+          />
+          <CopyField
+            label="Reddit body"
+            value={drafts.redditBody}
+            rows={6}
+            onChange={(redditBody) => onChange({ ...drafts, redditBody })}
+          />
+          <CopyField
+            label="Short social (X-length)"
+            value={drafts.socialShort}
+            rows={3}
+            onChange={(socialShort) => onChange({ ...drafts, socialShort })}
+          />
+          <CopyField
+            label="Longer post (LinkedIn / Facebook)"
+            value={drafts.socialLong}
+            rows={6}
+            onChange={(socialLong) => onChange({ ...drafts, socialLong })}
+          />
+          <CopyField
+            label="Friend-share blurb"
+            hint="Paste into a CodeFriends DM"
+            value={drafts.friendBlurb}
+            rows={3}
+            onChange={(friendBlurb) => onChange({ ...drafts, friendBlurb })}
+          />
+          <button className="ghost compact" type="button" disabled={busy} onClick={onGenerate}>
+            {busy ? "Drafting…" : "Regenerate drafts"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CopyField({
+  label,
+  hint,
+  value,
+  rows,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  value: string;
+  rows: number;
+  onChange: (value: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    setCopied(false);
+  }, [value]);
+  return (
+    <div className="launch-field">
+      <span className="launch-field-top">
+        <span>{label}</span>
+        <button
+          className="ghost compact"
+          type="button"
+          onClick={async () => {
+            setCopied(await copyText(value));
+          }}
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </span>
+      {hint ? <span className="launch-hint">{hint}</span> : null}
+      <textarea value={value} rows={rows} onChange={(e) => onChange(e.target.value)} />
+    </div>
   );
 }
 
