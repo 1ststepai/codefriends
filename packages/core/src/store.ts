@@ -681,7 +681,6 @@ export class Store {
     const item = await this.getLibraryItem(id);
     if (!item) throw new Error("Item not found");
     if (item.authorId !== userId) throw new Error("You can only remove your own item");
-    await this.db.prepare("DELETE FROM launch_packs WHERE library_item_id = ?").run(id);
     await this.db.prepare("DELETE FROM library_items WHERE id = ?").run(id);
   }
 

@@ -229,4 +229,10 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS help_packets_user_created ON help_packets(user_id, created_at);
     `,
   },
+  {
+    name: "011_drop_launch_packs",
+    sql: `
+      DROP TABLE IF EXISTS launch_packs;
+    `,
+  },
 ];
