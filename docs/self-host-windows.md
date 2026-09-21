@@ -84,7 +84,7 @@ Create the data folder:
 mkdir C:\codefriends-data
 ```
 
-**DEV login on a public URL is a demo, not an account system.** Anyone who can reach the hostname can sign in as `maya` / `parker` / any new username. Do not treat that as production auth. Set `CODEFRIENDS_DEV_LOGIN=0` (and `NODE_ENV=production`) when you no longer want that path.
+**DEV login on a public URL is a demo, not an account system.** Anyone who can reach the hostname can sign in as `maya` / `parker` / any new username. Do not treat that as production auth. Set `CODEFRIENDS_DEV_LOGIN=0` (and `NODE_ENV=production`) when you no longer want that path. Real users sign in with **Continue with Google** (`GEMINI_GOOGLE_*` plus the public URLs below).
 
 Public URLs — set these **after** you know the hostname (step 6):
 
@@ -228,6 +228,11 @@ A named tunnel needs a Cloudflare account and a hostname you control. This repo 
    ```env
    CODEFRIENDS_PUBLIC_URL=https://codefriends.1ststep.ai
    CODEFRIENDS_POPOUT_URL=https://codefriends.1ststep.ai
+   GEMINI_GOOGLE_CALLBACK_URL=https://codefriends.1ststep.ai/api/auth/gemini/callback
+   GEMINI_GOOGLE_CLIENT_ID=
+   GEMINI_GOOGLE_CLIENT_SECRET=
+   NODE_ENV=production
+   CODEFRIENDS_DEV_LOGIN=0
    ```
 
    Restart the Node server. Open `https://codefriends.1ststep.ai/health` and the popout at `/`.
@@ -288,7 +293,13 @@ This document does not list live IPs or verification strings. Those belong in yo
 | Cursor `codefriends.popoutUrl` | `https://codefriends.1ststep.ai` | same printed URL (update after every restart) |
 | Cursor `codefriends.serverUrl` | `https://codefriends.1ststep.ai` | same |
 
-Google OAuth (optional): authorized redirect URI must be `{CODEFRIENDS_PUBLIC_URL}/api/auth/gemini/callback`. That is unusable on a rotating quick-tunnel URL.
+Google OAuth (production login): one Web client. Register **both** `127.0.0.1` and `localhost` — Google treats them as different. Redirect URIs:
+
+- `http://127.0.0.1:8787/api/auth/gemini/callback`
+- `http://localhost:8787/api/auth/gemini/callback`
+- `https://codefriends.1ststep.ai/api/auth/gemini/callback`
+
+`GEMINI_GOOGLE_CALLBACK_URL` must match one of those exactly. With a named tunnel, also set `CODEFRIENDS_PUBLIC_URL` and `CODEFRIENDS_POPOUT_URL` to `https://codefriends.1ststep.ai` (http(s) only — not `codefriends://`). Quick-tunnel URLs rotate, so Google OAuth is unusable on a quick tunnel unless you re-add the new callback URI every restart.
 
 ## Honest limits
 

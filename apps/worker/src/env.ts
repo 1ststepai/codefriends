@@ -2,6 +2,7 @@ import {
   defaultRuntimeConfig,
   parseCorsOrigins,
   parseHistoryLimit,
+  trimEnv,
   type RuntimeConfig,
 } from "@codefriends/core";
 
@@ -22,8 +23,8 @@ export interface WorkerEnv {
 
 export function configFromEnv(env: WorkerEnv, requestUrl?: string): RuntimeConfig {
   const origin = requestUrl ? new URL(requestUrl).origin : "http://127.0.0.1:8787";
-  const publicUrl = (env.CODEFRIENDS_PUBLIC_URL ?? origin).replace(/\/$/, "");
-  const popoutUrl = (env.CODEFRIENDS_POPOUT_URL ?? "http://127.0.0.1:5173").replace(/\/$/, "");
+  const publicUrl = (trimEnv(env.CODEFRIENDS_PUBLIC_URL) || origin).replace(/\/$/, "");
+  const popoutUrl = (trimEnv(env.CODEFRIENDS_POPOUT_URL) || "http://127.0.0.1:5173").replace(/\/$/, "");
   const devFlag = env.CODEFRIENDS_DEV_LOGIN;
   return defaultRuntimeConfig({
     publicUrl,
@@ -34,9 +35,9 @@ export function configFromEnv(env: WorkerEnv, requestUrl?: string): RuntimeConfi
     storeKind: "d1",
     corsOrigins: parseCorsOrigins(env.CODEFRIENDS_CORS_ORIGINS),
     google: {
-      clientId: env.GEMINI_GOOGLE_CLIENT_ID ?? "",
-      clientSecret: env.GEMINI_GOOGLE_CLIENT_SECRET ?? "",
-      callbackUrl: env.GEMINI_GOOGLE_CALLBACK_URL ?? `${publicUrl}/api/auth/gemini/callback`,
+      clientId: trimEnv(env.GEMINI_GOOGLE_CLIENT_ID),
+      clientSecret: trimEnv(env.GEMINI_GOOGLE_CLIENT_SECRET),
+      callbackUrl: trimEnv(env.GEMINI_GOOGLE_CALLBACK_URL) || `${publicUrl}/api/auth/gemini/callback`,
     },
   });
 }

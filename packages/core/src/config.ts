@@ -26,11 +26,15 @@ export interface RuntimeConfig {
   };
 }
 
+export function trimEnv(raw: string | undefined): string {
+  return raw?.trim() ?? "";
+}
+
 export function defaultRuntimeConfig(partial?: Partial<RuntimeConfig>): RuntimeConfig {
-  const publicUrl = (partial?.publicUrl ?? "http://127.0.0.1:8787").replace(/\/$/, "");
+  const publicUrl = (trimEnv(partial?.publicUrl) || "http://127.0.0.1:8787").replace(/\/$/, "");
   return {
     publicUrl,
-    popoutUrl: (partial?.popoutUrl ?? "http://127.0.0.1:5173").replace(/\/$/, ""),
+    popoutUrl: (trimEnv(partial?.popoutUrl) || "http://127.0.0.1:5173").replace(/\/$/, ""),
     sessionTtlMs: partial?.sessionTtlMs ?? 30 * 24 * 60 * 60 * 1000,
     handoffTtlMs: partial?.handoffTtlMs ?? 2 * 60 * 1000,
     oauthStateTtlMs: partial?.oauthStateTtlMs ?? 10 * 60 * 1000,
@@ -41,9 +45,9 @@ export function defaultRuntimeConfig(partial?: Partial<RuntimeConfig>): RuntimeC
     storeKind: partial?.storeKind ?? "sqlite",
     corsOrigins: partial?.corsOrigins ?? [],
     google: {
-      clientId: partial?.google?.clientId ?? "",
-      clientSecret: partial?.google?.clientSecret ?? "",
-      callbackUrl: partial?.google?.callbackUrl ?? `${publicUrl}/api/auth/gemini/callback`,
+      clientId: trimEnv(partial?.google?.clientId),
+      clientSecret: trimEnv(partial?.google?.clientSecret),
+      callbackUrl: trimEnv(partial?.google?.callbackUrl) || `${publicUrl}/api/auth/gemini/callback`,
     },
   };
 }

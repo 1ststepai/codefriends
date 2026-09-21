@@ -10,6 +10,12 @@ import { join } from "node:path";
 import { WebSocket } from "ws";
 import type { LinkedIdentity, WsServerMessage } from "@codefriends/shared";
 import { HELP_PACKET_SECTION_HEADINGS } from "@codefriends/shared";
+import {
+  buildAdapters,
+  defaultRuntimeConfig,
+  describeProviders,
+  popoutRedirect,
+} from "@codefriends/core";
 import { startServer } from "./app.js";
 import { runMonitorTests } from "./monitor.test.js";
 
@@ -823,6 +829,168 @@ async function helpPackets(dbPath: string) {
   }
 }
 
+function googleAuthCatalogAndRedirects() {
+  const live = defaultRuntimeConfig({
+    devLogin: false,
+    popoutUrl: "https://codefriends.1ststep.ai",
+    publicUrl: "https://codefriends.1ststep.ai",
+    google: {
+      clientId: "id.apps.googleusercontent.com",
+      clientSecret: "secret",
+      callbackUrl: "https://codefriends.1ststep.ai/api/auth/gemini/callback",
+    },
+  });
+  const catalog = describeProviders(live, buildAdapters(live));
+  assert.equal(catalog[0]?.id, "gemini");
+  assert.equal(catalog[0]?.label, "Google");
+  assert.equal(catalog[0]?.availability, "live");
+  assert.equal(catalog[0]?.startPath, "/api/auth/gemini/start");
+  for (const id of ["cursor", "claude", "codex"] as const) {
+    const listed = catalog.find((p) => p.id === id);
+    assert.equal(listed?.availability, "blocked");
+    assert.ok(listed?.blockedReason);
+  }
+  assert.equal(catalog.find((p) => p.id === "dev")?.availability, "blocked");
+
+  const blankCallback = defaultRuntimeConfig({
+    publicUrl: "https://codefriends.1ststep.ai",
+    google: { clientId: "id", clientSecret: "secret", callbackUrl: "  " },
+  });
+  assert.equal(blankCallback.google.callbackUrl, "https://codefriends.1ststep.ai/api/auth/gemini/callback");
+
+  assert.equal(
+    popoutRedirect(live, { handoff: "abc", provider: "gemini" }),
+    "https://codefriends.1ststep.ai/?handoff=abc&provider=gemini",
+  );
+
+  const desktop = defaultRuntimeConfig({
+    popoutUrl: "codefriends://open",
+    publicUrl: "https://codefriends.1ststep.ai",
+  });
+  assert.equal(
+    popoutRedirect(desktop, { handoff: "xyz" }),
+    "https://codefriends.1ststep.ai/?handoff=xyz",
+  );
+}
+
+async function googleOauthHandoff(dbPath: string) {
+  const popoutUrl = "https://codefriends.1ststep.ai";
+  const callbackUrl = "http://127.0.0.1:8787/api/auth/gemini/callback";
+  const server = await startServer({
+    port: 0,
+    seed: false,
+    dbPath,
+    config: {
+      dbPath,
+      devLogin: false,
+      popoutUrl,
+      google: {
+        clientId: "test-client-id.apps.googleusercontent.com",
+        clientSecret: "test-secret",
+        callbackUrl,
+      },
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  try {
+    const catalog = await json<{
+      providers: Array<{
+        id: string;
+        label: string;
+        availability: string;
+        startPath?: string;
+        blockedReason?: string;
+      }>;
+    }>(await fetch(`${server.url}/api/auth/providers`), "providers catalog");
+    const google = catalog.providers.find((p) => p.id === "gemini");
+    assert.equal(google?.label, "Google");
+    assert.equal(google?.availability, "live");
+    assert.equal(google?.startPath, "/api/auth/gemini/start");
+    const cursor = catalog.providers.find((p) => p.id === "cursor");
+    assert.equal(cursor?.availability, "blocked");
+    assert.ok(cursor?.blockedReason);
+
+    const blockedStart = await fetch(`${server.url}/api/auth/cursor/start`, { redirect: "manual" });
+    assert.equal(blockedStart.status, 501);
+    const blockedBody = (await blockedStart.json()) as { error?: string };
+    assert.match(blockedBody.error ?? "", /Cursor does not publish/);
+
+    const started = await fetch(`${server.url}/api/auth/gemini/start?client=web`, { redirect: "manual" });
+    assert.equal(started.status, 302);
+    const authUrl = new URL(started.headers.get("location") ?? "");
+    assert.equal(authUrl.origin + authUrl.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
+    assert.equal(authUrl.searchParams.get("client_id"), "test-client-id.apps.googleusercontent.com");
+    assert.equal(authUrl.searchParams.get("redirect_uri"), callbackUrl);
+    assert.equal(authUrl.searchParams.get("code_challenge_method"), "S256");
+    assert.ok(authUrl.searchParams.get("code_challenge"));
+    const state = authUrl.searchParams.get("state");
+    assert.ok(state);
+
+    const expired = await fetch(`${server.url}/api/auth/gemini/callback?code=nope&state=bogus`, {
+      redirect: "manual",
+    });
+    assert.equal(expired.status, 302);
+    const expiredAt = new URL(expired.headers.get("location") ?? "");
+    assert.equal(expiredAt.origin, popoutUrl);
+    assert.match(expiredAt.searchParams.get("error") ?? "", /state expired/i);
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "https://oauth2.googleapis.com/token") {
+        return new Response(JSON.stringify({ access_token: "tok" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url === "https://openidconnect.googleapis.com/v1/userinfo") {
+        return new Response(
+          JSON.stringify({ sub: "google-sub-1", email: "evan@example.com", name: "Evan" }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return originalFetch(input, init);
+    }) as typeof fetch;
+
+    const callback = await fetch(
+      `${server.url}/api/auth/gemini/callback?code=fake-code&state=${encodeURIComponent(state!)}`,
+      { redirect: "manual" },
+    );
+    assert.equal(callback.status, 302);
+    const back = new URL(callback.headers.get("location") ?? "");
+    assert.equal(back.origin, popoutUrl);
+    const handoff = back.searchParams.get("handoff");
+    assert.ok(handoff);
+    assert.equal(back.searchParams.get("provider"), "gemini");
+
+    const redeemed = await json<{ token: string; user: { displayName: string; username: string } }>(
+      await fetch(`${server.url}/api/auth/handoff/redeem`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: handoff, client: "web" }),
+      }),
+      "redeem google handoff",
+    );
+    assert.equal(redeemed.user.displayName, "Evan");
+
+    const me = await json<{ identities: LinkedIdentity[] }>(
+      await fetch(`${server.url}/api/me`, { headers: { authorization: `Bearer ${redeemed.token}` } }),
+      "me after google",
+    );
+    assert.equal(me.identities[0]?.provider, "gemini");
+    assert.equal(me.identities[0]?.email, "evan@example.com");
+
+    const reused = await fetch(`${server.url}/api/auth/handoff/redeem`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: handoff }),
+    });
+    assert.equal(reused.status, 400, "handoff is one-time");
+  } finally {
+    globalThis.fetch = originalFetch;
+    await server.close();
+  }
+}
+
 async function servePopout(dbPath: string) {
   const popoutDir = mkdtempSync(join(tmpdir(), "codefriends-popout-"));
   mkdirSync(join(popoutDir, "assets"), { recursive: true });
@@ -871,6 +1039,7 @@ async function servePopout(dbPath: string) {
 
 async function main() {
   const dir = mkdtempSync(join(tmpdir(), "codefriends-smoke-"));
+  googleAuthCatalogAndRedirects();
   await persistAcrossRestart(join(dir, "persist.sqlite"));
   await historyCap(join(dir, "cap.sqlite"));
   await inviteAndStatus(join(dir, "invite.sqlite"));
@@ -879,8 +1048,9 @@ async function main() {
   await helpPackets(join(dir, "help-packets.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   await runMonitorTests();
+  await googleOauthHandoff(join(dir, "google-oauth.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served, admin metrics gated",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served, admin metrics gated, google oauth start/callback/handoff",
   );
 }
 

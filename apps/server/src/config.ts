@@ -7,6 +7,7 @@ import {
   isProductionEnv,
   parseCorsOrigins,
   parseHistoryLimit,
+  trimEnv,
   type RuntimeConfig,
   type StoreKind,
 } from "@codefriends/core";
@@ -64,11 +65,16 @@ export function loadConfig(
   const production = isProduction();
   const host = overrides?.host ?? process.env.HOST ?? (production ? "0.0.0.0" : "127.0.0.1");
   const port = overrides?.port ?? Number(process.env.PORT ?? 8787);
-  const publicUrl = (process.env.CODEFRIENDS_PUBLIC_URL ?? `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`).replace(
-    /\/$/,
-    "",
-  );
-  const popoutUrl = (process.env.CODEFRIENDS_POPOUT_URL ?? "http://127.0.0.1:5173").replace(/\/$/, "");
+  const publicUrl = (
+    trimEnv(overrides?.publicUrl) ||
+    trimEnv(process.env.CODEFRIENDS_PUBLIC_URL) ||
+    `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${port}`
+  ).replace(/\/$/, "");
+  const popoutUrl = (
+    trimEnv(overrides?.popoutUrl) ||
+    trimEnv(process.env.CODEFRIENDS_POPOUT_URL) ||
+    "http://127.0.0.1:5173"
+  ).replace(/\/$/, "");
 
   const devFlag = process.env.CODEFRIENDS_DEV_LOGIN;
   const devLogin = overrides?.devLogin ?? (devFlag === "1" ? true : devFlag === "0" ? false : !production);
@@ -86,11 +92,10 @@ export function loadConfig(
     storeKind,
     corsOrigins: overrides?.corsOrigins ?? parseCorsOrigins(process.env.CODEFRIENDS_CORS_ORIGINS),
     google: {
-      clientId: overrides?.google?.clientId ?? process.env.GEMINI_GOOGLE_CLIENT_ID ?? "",
-      clientSecret: overrides?.google?.clientSecret ?? process.env.GEMINI_GOOGLE_CLIENT_SECRET ?? "",
+      clientId: trimEnv(overrides?.google?.clientId ?? process.env.GEMINI_GOOGLE_CLIENT_ID),
+      clientSecret: trimEnv(overrides?.google?.clientSecret ?? process.env.GEMINI_GOOGLE_CLIENT_SECRET),
       callbackUrl:
-        overrides?.google?.callbackUrl ??
-        process.env.GEMINI_GOOGLE_CALLBACK_URL ??
+        trimEnv(overrides?.google?.callbackUrl ?? process.env.GEMINI_GOOGLE_CALLBACK_URL) ||
         `${publicUrl}/api/auth/gemini/callback`,
     },
   });
