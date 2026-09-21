@@ -128,8 +128,7 @@ h1 {
 .invite input,
 .board-compose input,
 .board-compose textarea,
-.board-compose select,
-.launch-pack textarea {
+.board-compose select {
   width: 100%;
   background: #1b1b1b;
   border: 1px solid var(--line);
@@ -145,13 +144,11 @@ h1 {
 .invite input:focus,
 .board-compose input:focus,
 .board-compose textarea:focus,
-.board-compose select:focus,
-.launch-pack textarea:focus {
+.board-compose select:focus {
   border-color: var(--accent);
 }
 
-.board-compose textarea,
-.launch-pack textarea {
+.board-compose textarea {
   resize: vertical;
   min-height: 64px;
   font: inherit;
@@ -407,7 +404,7 @@ h1 {
 
 .library-card {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   width: calc(100% - 28px);
   margin: 4px 14px 8px;
   padding: 9px 10px;
@@ -415,6 +412,7 @@ h1 {
   background: var(--elev);
   border: 1px solid var(--line);
   border-radius: 6px;
+  cursor: pointer;
 }
 
 .library-card.official {
@@ -424,17 +422,6 @@ h1 {
 .library-card:hover,
 .library-card.active {
   border-color: var(--accent);
-}
-
-.library-card-main {
-  display: grid;
-  gap: 4px;
-  width: 100%;
-  padding: 0;
-  text-align: left;
-  background: none;
-  border: 0;
-  cursor: pointer;
 }
 
 .library-card .status {
@@ -447,41 +434,6 @@ h1 {
   text-align: center;
   text-decoration: none;
   color: inherit;
-}
-
-.launch-pack {
-  display: grid;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-}
-
-.launch-pack .lede {
-  margin: 0;
-  font-size: 12px;
-}
-
-.launch-field {
-  display: grid;
-  gap: 4px;
-}
-
-.launch-field-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.launch-hint {
-  color: var(--soft);
-  font-size: 11px;
-}
-
-.launch-pack textarea {
-  min-height: 0;
 }
 
 .dm {
