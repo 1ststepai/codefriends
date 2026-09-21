@@ -19,8 +19,8 @@
       {
         "label": "main",
         "title": "CodeFriends",
-        "width": 440,
-        "height": 780,
+        "width": 960,
+        "height": 680,
         "minWidth": 360,
         "minHeight": 520,
         "resizable": true,

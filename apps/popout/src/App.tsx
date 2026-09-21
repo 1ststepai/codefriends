@@ -80,7 +80,7 @@ export function App() {
   const [pendingInvite, setPendingInvite] = useState(() => inviteFromLocation() || loadPendingInvite());
   const [inviteFrom, setInviteFrom] = useState<PublicUser | null>(null);
   const [wsReady, setWsReady] = useState(false);
-  const [view, setView] = useState<"friends" | "board" | "library">("friends");
+  const [view, setView] = useState<"friends" | "board" | "library" | "profile">("friends");
   const [topics, setTopics] = useState<ForumTopic[]>([]);
   const [openTopicId, setOpenTopicId] = useState<string | null>(null);
   const [openTopic, setOpenTopic] = useState<ForumTopic | null>(null);
@@ -374,14 +374,11 @@ export function App() {
   }
 
   return (
-    <div className={`shell${view === "library" ? " library-mode" : ""}`}>
+    <div className={`shell view-${view}`}>
       <header className="top">
-        <div>
-          <div className="kicker">Learn together</div>
-          <h1>CodeFriends</h1>
-        </div>
+        <h1>CodeFriends</h1>
         <button
-          className="ghost"
+          className="ghost quiet"
           type="button"
           onClick={() => {
             clearSession();
@@ -405,9 +402,10 @@ export function App() {
         <button
           type="button"
           className={view === "board" ? "active" : ""}
+          aria-label="School board"
           onClick={() => setView("board")}
         >
-          School board
+          Board
         </button>
         <button
           type="button"
@@ -415,6 +413,13 @@ export function App() {
           onClick={() => setView("library")}
         >
           Library
+        </button>
+        <button
+          type="button"
+          className={view === "profile" ? "active" : ""}
+          onClick={() => setView("profile")}
+        >
+          Profile
         </button>
       </nav>
 
@@ -429,46 +434,41 @@ export function App() {
             view === "board" ? "Search the school board" : view === "library" ? "Search the library" : "Search friends"
           }
           onKeyDown={(e) => {
-            if (view === "friends" && e.key === "Enter" && query.trim()) {
+            if ((view === "friends" || view === "profile") && e.key === "Enter" && query.trim()) {
               send({ type: "add_friend", username: query.trim() });
             }
           }}
         />
       </label>
 
-      <SelfBar
-        self={self}
-        connected={connected}
-        providers={providers}
-        token={token}
-        onChange={(patch) => send({ type: "presence", ...patch })}
-        onLinked={(u) => {
-          setSelf(u);
-          saveSession({ token, user: u });
-        }}
-        onFriends={setFriends}
-        onError={setError}
-      />
-
-      {view === "friends" ? (
+      {view === "friends" || view === "profile" ? (
         <section className="list">
-          <SectionTitle label="Agents online" count={filteredAgents.length} />
-          {filteredAgents.map((friend) => (
-            <FriendRow
-              key={friend.id}
-              friend={friend}
-              active={friend.id === activeId}
-              showClient
-              onClick={() => setActiveId(friend.id)}
-            />
-          ))}
-          <SectionTitle label="Friends" count={filteredPeople.length} />
+          {filteredAgents.length ? (
+            <>
+              <SectionTitle label="Agents online" count={filteredAgents.length} />
+              {filteredAgents.map((friend) => (
+                <FriendRow
+                  key={friend.id}
+                  friend={friend}
+                  active={friend.id === activeId}
+                  showClient
+                  onClick={() => {
+                    setActiveId(friend.id);
+                    setView("friends");
+                  }}
+                />
+              ))}
+            </>
+          ) : null}
           {filteredPeople.map((friend) => (
             <FriendRow
               key={friend.id}
               friend={friend}
               active={friend.id === activeId}
-              onClick={() => setActiveId(friend.id)}
+              onClick={() => {
+                setActiveId(friend.id);
+                setView("friends");
+              }}
             />
           ))}
         </section>
@@ -486,7 +486,7 @@ export function App() {
           }}
           onOpen={setOpenTopicId}
         />
-      ) : (
+      ) : view === "library" ? (
         <LibraryList
           token={token}
           items={filteredLibrary}
@@ -535,7 +535,7 @@ export function App() {
             }
           }}
         />
-      )}
+      ) : null}
 
       {view === "friends" ? (
         <DmPanel
@@ -579,7 +579,7 @@ export function App() {
             setOpenLibraryId(shelf?.id ?? null);
           }}
         />
-      ) : (
+      ) : view === "library" ? (
         <LibraryPanel
           token={token}
           selfId={self.id}
@@ -590,12 +590,33 @@ export function App() {
             setOpenLibraryId((cur) => (cur === id ? null : cur));
           }}
         />
+      ) : (
+        <section className="dm profile-pane">
+          <SelfBar
+            self={self}
+            connected={connected}
+            providers={providers}
+            token={token}
+            onChange={(patch) => send({ type: "presence", ...patch })}
+            onLinked={(u) => {
+              setSelf(u);
+              saveSession({ token, user: u });
+            }}
+            onFriends={setFriends}
+            onError={setError}
+          />
+        </section>
       )}
 
-      {error ? <p className="banner">{error}</p> : null}
-      <footer className="fineprint">
-        CodeFriends popout. Not affiliated with Cursor, Anthropic, OpenAI, or Google.
-      </footer>
+      {error ? (
+        <p className="banner">
+          <span>{error}</span>
+          <button type="button" className="ghost quiet" onClick={() => setError("")}>
+            Dismiss
+          </button>
+        </p>
+      ) : null}
+      <footer className="fineprint">Not affiliated with Cursor, Anthropic, OpenAI, or Google.</footer>
     </div>
   );
 }
@@ -630,16 +651,18 @@ function Login({
   const googleLive = google?.availability === "live" && Boolean(google.startPath);
   const openedHost = hostOpenedFrom(hinted);
   const highlighted = productProviders.find((p) => p.id === hinted);
+  const googleHref =
+    googleLive && google.startPath
+      ? oauthStartHref(google.startPath, { client: clientHint() ?? "web" })
+      : undefined;
 
   return (
     <div className="shell login">
       <div className="kicker">Learn together</div>
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
-        Learn with friends while you use Cursor, Claude, Codex, or Gemini. Sign in with Google to
-        join. Presence, DMs, a short profile (GitHub / tools / optional socials), a school board, a
-        build library of 1stStep starters plus projects the cohort shares, and a help packet you
-        can copy to a friend's AI chat.
+        Learn with friends in Cursor, Claude, Codex, or Gemini. Sign in with Google to join —
+        presence, DMs, a school board, and a build library.
       </p>
       {inviteFrom ? (
         <p className="lede highlight">
@@ -671,8 +694,8 @@ function Login({
             "Sign in with Google once GEMINI_GOOGLE_* env is set. That is CodeFriends identity, not Gemini CLI login."}
         </p>
       ) : null}
-      {google?.availability === "live" && google.startPath ? (
-        <a className="primary google-signin" href={oauthStartHref(google.startPath, { client: clientHint() ?? "web" })}>
+      {googleHref ? (
+        <a className="primary google-signin" href={googleHref}>
           Continue with Google
         </a>
       ) : (
@@ -716,8 +739,8 @@ function Login({
           }}
         >
           <p className="lede">
-            <strong>Local / smoke demo</strong> — username only, no password. Same roster as before:
-            maya, parker, and friends. Not used in production.
+            <strong>Local demo</strong> — username only, no password. Seed roster includes maya and
+            parker. Not used in production.
           </p>
           <label>
             Username
@@ -789,7 +812,14 @@ function Login({
           </button>
         </form>
       ) : null}
-      {error ? <p className="banner">{error}</p> : null}
+      {error ? (
+        <p className="banner">
+          <span>{error}</span>
+          <button type="button" className="ghost quiet" onClick={() => onError("")}>
+            Dismiss
+          </button>
+        </p>
+      ) : null}
       <footer className="fineprint">
         Not affiliated with Cursor, Anthropic, OpenAI, or Google.
       </footer>
@@ -935,22 +965,28 @@ function ProfileEditor({
     }
   };
 
+  const urlField = (field: (typeof PROFILE_URL_FIELDS)[number]) => (
+    <label key={field.key} className="status-label">
+      {field.label}
+      <input
+        className="status-input"
+        value={urls[field.key]}
+        placeholder={field.placeholder}
+        onChange={(e) => setUrls((current) => ({ ...current, [field.key]: e.target.value }))}
+        onBlur={() => {
+          if (urls[field.key] !== (self[field.key] ?? "")) void save({ [field.key]: urls[field.key] });
+        }}
+      />
+    </label>
+  );
+
   return (
     <div className="profile-edit">
-      {PROFILE_URL_FIELDS.map((field) => (
-        <label key={field.key} className="status-label">
-          {field.label}
-          <input
-            className="status-input"
-            value={urls[field.key]}
-            placeholder={field.placeholder}
-            onChange={(e) => setUrls((current) => ({ ...current, [field.key]: e.target.value }))}
-            onBlur={() => {
-              if (urls[field.key] !== (self[field.key] ?? "")) void save({ [field.key]: urls[field.key] });
-            }}
-          />
-        </label>
-      ))}
+      {PROFILE_URL_FIELDS.slice(0, 2).map(urlField)}
+      <details className="fold nested">
+        <summary>Optional socials</summary>
+        {PROFILE_URL_FIELDS.slice(2).map(urlField)}
+      </details>
       <label className="status-label">
         Tools
         <input
@@ -1167,12 +1203,14 @@ function LinkedAccounts({
       {linkable.map((provider) => {
         if (linked.has(provider.id)) return null;
         if (provider.availability === "live" && provider.startPath) {
+          const href = oauthStartHref(provider.startPath, {
+            link: "1",
+            token,
+            client: self.client,
+          });
+          if (!href) return null;
           return (
-            <a
-              key={provider.id}
-              className="link-account"
-              href={oauthStartHref(provider.startPath, { link: "1", token, client: self.client })}
-            >
+            <a key={provider.id} className="link-account" href={href}>
               Link {provider.label}
             </a>
           );
@@ -1222,7 +1260,6 @@ function FriendRow({
           {showClient || friend.online ? <ClientBadge client={friend.client} /> : null}
         </span>
         <span className="status">{friend.statusText || (friend.online ? "Available" : "Offline")}</span>
-        <ProfileBits user={friend} links={false} />
       </span>
     </button>
   );
@@ -1259,7 +1296,7 @@ function DmPanel({
   if (!friend) {
     return (
       <section className="dm empty">
-        <p>Click a friend to DM. Learn in the same room — this popout holds the chat, not the IDE.</p>
+        <p>Say hi — keep it short.</p>
       </section>
     );
   }
@@ -1267,13 +1304,12 @@ function DmPanel({
   return (
     <section className="dm">
       <header>
-        <span>
-          DM · <strong>{friend.displayName}</strong>
-          <ProfileBits user={friend} links />
+        <span className="name-line">
+          <strong>{friend.displayName}</strong>
+          {friend.online ? <ClientBadge client={friend.client} /> : null}
         </span>
-        <span className="chevron" aria-hidden>
-          ▾
-        </span>
+        <span className="status">{friend.statusText || (friend.online ? "Available" : "Offline")}</span>
+        <ProfileBits user={friend} links />
       </header>
       <div className="thread">
         {messages.map((m) => (
@@ -1329,42 +1365,45 @@ function TopicList({
   return (
     <section className="list">
       <SectionTitle label="Threads" count={topics.length} />
-      <form
-        className="board-compose"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (!title.trim() || !body.trim()) return;
-          setBusy(true);
-          onError("");
-          try {
-            onPosted(await createTopic(token, title, body));
-            setTitle("");
-            setBody("");
-          } catch (err) {
-            onError(err instanceof Error ? err.message : "Could not post to the board");
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <p className="lede">Ask a question or share what you are learning. Anyone signed in on this school can read and reply.</p>
-        <input
-          value={title}
-          maxLength={TOPIC_TITLE_MAX}
-          placeholder="Title — what are you working through?"
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <textarea
-          value={body}
-          maxLength={TOPIC_BODY_MAX}
-          placeholder="Notes, a question, or a snippet (plain text is fine)"
-          rows={3}
-          onChange={(e) => setBody(e.target.value)}
-        />
-        <button className="ghost compact" disabled={busy || !title.trim() || !body.trim()} type="submit">
-          {busy ? "Posting…" : "Post to the board"}
-        </button>
-      </form>
+      <details className="fold panel">
+        <summary>Start a thread</summary>
+        <form
+          className="board-compose"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!title.trim() || !body.trim()) return;
+            setBusy(true);
+            onError("");
+            try {
+              onPosted(await createTopic(token, title, body));
+              setTitle("");
+              setBody("");
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not post to the board");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <p className="lede">Ask a question or share what you are learning. Anyone signed in can read and reply.</p>
+          <input
+            value={title}
+            maxLength={TOPIC_TITLE_MAX}
+            placeholder="Title — what are you working through?"
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <textarea
+            value={body}
+            maxLength={TOPIC_BODY_MAX}
+            placeholder="Notes, a question, or a snippet (plain text is fine)"
+            rows={3}
+            onChange={(e) => setBody(e.target.value)}
+          />
+          <button className="ghost compact" disabled={busy || !title.trim() || !body.trim()} type="submit">
+            {busy ? "Posting…" : "Post to the board"}
+          </button>
+        </form>
+      </details>
       {topics.map((topic) => (
         <button
           key={topic.id}
@@ -1410,7 +1449,7 @@ function BoardPanel({
   if (!topic) {
     return (
       <section className="dm empty">
-        <p>Open a thread on the school board. This is the cohort’s shared notes — not a 1:1 DM.</p>
+        <p>Open a thread. Shared notes for the cohort — not a 1:1 message.</p>
       </section>
     );
   }
@@ -1418,9 +1457,7 @@ function BoardPanel({
   return (
     <section className="dm">
       <header>
-        <span>
-          School board · <strong>{topic.title}</strong>
-        </span>
+        <strong>{topic.title}</strong>
         <span className="status">
           {topic.authorDisplayName} · {formatWhen(topic.createdAt)}
         </span>
@@ -1508,10 +1545,7 @@ function LibraryList({
   return (
     <section className="list">
       <div className="library-hero">
-        <p className="lede">
-          Start a build from the trusted <strong>1stStep</strong> shelf, share a project, or write a
-          help packet so a friend can finish stuck work on their own AI usage.
-        </p>
+        <p className="lede">1stStep starters, cohort shares, and help packets for a friend’s AI chat.</p>
         <div className="library-hero-actions">
           <button
             className="primary"
@@ -1526,6 +1560,65 @@ function LibraryList({
           </button>
         </div>
       </div>
+      <details className="fold panel">
+        <summary>Share a project</summary>
+        <form
+          className="board-compose"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!title.trim() || !description.trim() || !url.trim()) return;
+            setBusy(true);
+            onError("");
+            try {
+              onAdded(await addLibraryItem(token, { title, description, url, kind }));
+              setTitle("");
+              setDescription("");
+              setUrl("");
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not add to the library");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <p className="lede">Share what you are building. Anyone signed in can add a link — https only.</p>
+          <input
+            value={title}
+            maxLength={LIBRARY_TITLE_MAX}
+            placeholder="Title"
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <textarea
+            value={description}
+            maxLength={LIBRARY_DESCRIPTION_MAX}
+            placeholder="Short description"
+            rows={2}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <input
+            value={url}
+            placeholder="https://"
+            onChange={(e) => setUrl(e.target.value)}
+          />
+          <label className="status-label">
+            Kind
+            <select value={kind} onChange={(e) => setKind(e.target.value as (typeof LIBRARY_KINDS)[number])}>
+              {LIBRARY_KINDS.map((k) => (
+                <option key={k} value={k}>
+                  {LIBRARY_KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="ghost compact"
+            disabled={busy || !title.trim() || !description.trim() || !url.trim()}
+            type="submit"
+          >
+            {busy ? "Adding…" : "Add to the library"}
+          </button>
+        </form>
+      </details>
       <SectionTitle label="1stStep shelf" count={official.length} />
       {official.map((item) => (
         <LibraryCard
@@ -1535,81 +1628,32 @@ function LibraryList({
           onOpen={() => onOpen(item.id)}
         />
       ))}
-      <SectionTitle label="Your help packets" count={packets.length} />
-      {packets.map((packet) => (
-        <button
-          key={packet.id}
-          type="button"
-          className={`library-card ${packet.id === activePacketId ? "active" : ""}`}
-          onClick={() => onOpenPacket(packet.id)}
-        >
-          <span className="name-line">
-            <strong>{packet.title}</strong>
-            <span className="badge">Draft</span>
-          </span>
-          <span className="status">Copy or download — nothing is posted for you.</span>
-        </button>
-      ))}
-      <form
-        className="board-compose"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (!title.trim() || !description.trim() || !url.trim()) return;
-          setBusy(true);
-          onError("");
-          try {
-            onAdded(await addLibraryItem(token, { title, description, url, kind }));
-            setTitle("");
-            setDescription("");
-            setUrl("");
-          } catch (err) {
-            onError(err instanceof Error ? err.message : "Could not add to the library");
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <p className="lede">Share what you are building. Anyone signed in can add a link — https only.</p>
-        <input
-          value={title}
-          maxLength={LIBRARY_TITLE_MAX}
-          placeholder="Title"
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <textarea
-          value={description}
-          maxLength={LIBRARY_DESCRIPTION_MAX}
-          placeholder="Short description"
-          rows={2}
-          onChange={(e) => setDescription(e.target.value)}
-        />
-        <input
-          value={url}
-          placeholder="https://"
-          onChange={(e) => setUrl(e.target.value)}
-        />
-        <label className="status-label">
-          Kind
-          <select value={kind} onChange={(e) => setKind(e.target.value as (typeof LIBRARY_KINDS)[number])}>
-            {LIBRARY_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {LIBRARY_KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="ghost compact"
-          disabled={busy || !title.trim() || !description.trim() || !url.trim()}
-          type="submit"
-        >
-          {busy ? "Adding…" : "Add to the library"}
-        </button>
-      </form>
-      <SectionTitle label="From the cohort" count={community.length} />
-      {community.map((item) => (
-        <LibraryCard key={item.id} item={item} active={item.id === activeId} onOpen={() => onOpen(item.id)} />
-      ))}
+      {packets.length ? (
+        <>
+          <SectionTitle label="Your help packets" count={packets.length} />
+          {packets.map((packet) => (
+            <button
+              key={packet.id}
+              type="button"
+              className={`library-card ${packet.id === activePacketId ? "active" : ""}`}
+              onClick={() => onOpenPacket(packet.id)}
+            >
+              <span className="name-line">
+                <strong>{packet.title}</strong>
+                <span className="badge">Packet</span>
+              </span>
+            </button>
+          ))}
+        </>
+      ) : null}
+      {community.length ? (
+        <>
+          <SectionTitle label="From the cohort" count={community.length} />
+          {community.map((item) => (
+            <LibraryCard key={item.id} item={item} active={item.id === activeId} onOpen={() => onOpen(item.id)} />
+          ))}
+        </>
+      ) : null}
     </section>
   );
 }
@@ -1631,8 +1675,11 @@ function LibraryCard({
     >
       <span className="name-line">
         <strong>{item.title}</strong>
-        {item.source === "official" ? <span className="badge official">1stStep</span> : null}
-        <span className="badge">{LIBRARY_KIND_LABEL[item.kind]}</span>
+        {item.source === "official" ? (
+          <span className="badge official">1stStep</span>
+        ) : (
+          <span className="badge">{LIBRARY_KIND_LABEL[item.kind]}</span>
+        )}
       </span>
       <span className="status">{item.description}</span>
     </button>
@@ -1664,9 +1711,7 @@ function LibraryPanel({
   return (
     <section className="dm">
       <header>
-        <span>
-          Build library · <strong>{item.title}</strong>
-        </span>
+        <strong>{item.title}</strong>
         <span className="status">
           {item.source === "official" ? "Trusted 1stStep starter" : item.authorDisplayName} ·{" "}
           {LIBRARY_KIND_LABEL[item.kind]}
@@ -1772,16 +1817,19 @@ function HelpPacketPanel({
   return (
     <section className="dm">
       <header>
-        <span>Help packet</span>
-        <span className="status">You write it to share. They run agents on their account.</span>
+        <strong>Help packet</strong>
+        <span className="status">They run this on their own AI usage.</span>
       </header>
       <div className="thread">
-        <p className="lede packet-consent">
-          Create this packet only if you want a friend to help. They accept voluntarily and finish
-          the work on <strong>their</strong> Cursor / Claude / Codex / Gemini usage — we never claim
-          to stretch vendor quotas. Only the notes you type are included (no chat-history scrape).
-          Copy or download the markdown; nothing is posted to socials.
-        </p>
+        <details className="fold nested packet-consent">
+          <summary>How sharing works</summary>
+          <p className="lede">
+            Write this only if you want a friend to help. They accept voluntarily and finish on{" "}
+            <strong>their</strong> Cursor / Claude / Codex / Gemini usage — we never claim to
+            stretch vendor quotas. Only the notes you type (no chat-history scrape). Copy or
+            download the markdown; nothing is posted to socials.
+          </p>
+        </details>
         {packet ? (
           <div className="packet-actions">
             <button className="ghost compact" type="button" onClick={onWriteAnother}>
@@ -1818,65 +1866,70 @@ function HelpPacketPanel({
               rows={3}
               onChange={(e) => setField("goal", e.target.value)}
             />
-            <input
-              value={fields.repoUrl}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="2. Repo URL"
-              onChange={(e) => setField("repoUrl", e.target.value)}
-            />
-            <input
-              value={fields.branch}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="Branch"
-              onChange={(e) => setField("branch", e.target.value)}
-            />
-            <input
-              value={fields.paths}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="Relevant paths"
-              onChange={(e) => setField("paths", e.target.value)}
-            />
-            <textarea
-              value={fields.constraints}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="3. Constraints — don't touch X, stack notes"
-              rows={2}
-              onChange={(e) => setField("constraints", e.target.value)}
-            />
-            <textarea
-              value={fields.blocked}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="4. What's blocked / tried"
-              rows={2}
-              onChange={(e) => setField("blocked", e.target.value)}
-            />
-            <textarea
-              value={fields.successCriteria}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="5. Success criteria"
-              rows={2}
-              onChange={(e) => setField("successCriteria", e.target.value)}
-            />
-            <textarea
-              value={fields.sendBack}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="6. How to send back (PR link preferred)"
-              rows={2}
-              onChange={(e) => setField("sendBack", e.target.value)}
-            />
-            <input
-              value={fields.libraryItemUrl}
-              maxLength={HELP_PACKET_FIELD_MAX}
-              placeholder="7. Optional CodeFriends library item (https://)"
-              onChange={(e) => setField("libraryItemUrl", e.target.value)}
-            />
+            <details className="fold nested">
+              <summary>Repo, constraints, and send-back</summary>
+              <input
+                value={fields.repoUrl}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="2. Repo URL"
+                onChange={(e) => setField("repoUrl", e.target.value)}
+              />
+              <input
+                value={fields.branch}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="Branch"
+                onChange={(e) => setField("branch", e.target.value)}
+              />
+              <input
+                value={fields.paths}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="Relevant paths"
+                onChange={(e) => setField("paths", e.target.value)}
+              />
+              <textarea
+                value={fields.constraints}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="3. Constraints — don't touch X, stack notes"
+                rows={2}
+                onChange={(e) => setField("constraints", e.target.value)}
+              />
+              <textarea
+                value={fields.blocked}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="4. What's blocked / tried"
+                rows={2}
+                onChange={(e) => setField("blocked", e.target.value)}
+              />
+              <textarea
+                value={fields.successCriteria}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="5. Success criteria"
+                rows={2}
+                onChange={(e) => setField("successCriteria", e.target.value)}
+              />
+              <textarea
+                value={fields.sendBack}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="6. How to send back (PR link preferred)"
+                rows={2}
+                onChange={(e) => setField("sendBack", e.target.value)}
+              />
+              <input
+                value={fields.libraryItemUrl}
+                maxLength={HELP_PACKET_FIELD_MAX}
+                placeholder="7. Optional CodeFriends library item (https://)"
+                onChange={(e) => setField("libraryItemUrl", e.target.value)}
+              />
+            </details>
             <button className="ghost compact" disabled={busy || !canSave} type="submit">
               {busy ? "Saving…" : "Save draft"}
             </button>
           </form>
         )}
-        <h3 className="packet-preview-label">Markdown preview</h3>
-        <pre className="packet-preview">{markdown}</pre>
+        <details className="fold nested">
+          <summary>Markdown preview</summary>
+          <pre className="packet-preview">{markdown}</pre>
+        </details>
         <div className="packet-actions">
           <button className="primary" type="button" onClick={() => void copyMarkdown()}>
             {copied ? "Copied" : "Copy markdown"}
@@ -2019,9 +2072,10 @@ function hostOpenedFrom(hinted: string | undefined): string | undefined {
   return hinted in CLIENT_LABEL ? CLIENT_LABEL[hinted as ClientKind] : hinted;
 }
 
-function oauthStartHref(startPath: string, query: Record<string, string>): string {
+function oauthStartHref(startPath: string, params: Record<string, string>): string | undefined {
+  if (!/^\/api\/auth\/[a-z0-9-]+\/start$/.test(startPath)) return;
   const url = new URL(apiUrl(startPath), window.location.origin);
-  for (const [key, value] of Object.entries(query)) {
+  for (const [key, value] of Object.entries(params)) {
     if (value) url.searchParams.set(key, value);
   }
   return url.toString();
