@@ -4,8 +4,9 @@ import {
   cleanSocialUrl,
   conversationKey,
   DM_TEXT_MAX,
-  canDraftLaunchPack,
-  draftLaunchCopy,
+  HELP_PACKET_LIST_LIMIT,
+  HELP_PACKET_MARKDOWN_MAX,
+  HELP_PACKET_TITLE_MAX,
   isLibraryKind,
   isValidUsername,
   LIBRARY_DESCRIPTION_MAX,
@@ -24,7 +25,7 @@ import {
   type ClientKind,
   type ForumReply,
   type ForumTopic,
-  type LaunchPack,
+  type HelpPacket,
   type LibraryItem,
   type LibraryKind,
   type LibrarySource,
@@ -684,76 +685,47 @@ export class Store {
     await this.db.prepare("DELETE FROM library_items WHERE id = ?").run(id);
   }
 
-  async getLaunchPack(userId: string, libraryItemId: string): Promise<LaunchPack | undefined> {
-    const row = await this.db
-      .prepare(
-        `SELECT id, library_item_id, user_id, show_hn_title, show_hn_body, reddit_title, reddit_body,
-                social_short, social_long, friend_blurb, created_at, updated_at
-         FROM launch_packs WHERE library_item_id = ? AND user_id = ?`,
-      )
-      .get<LaunchPackRow>(libraryItemId, userId);
-    return row ? rowToLaunchPack(row) : undefined;
-  }
-
-  async upsertLaunchPack(userId: string, libraryItemId: string): Promise<LaunchPack> {
-    const item = await this.getLibraryItem(libraryItemId);
-    if (!item) throw new Error("Item not found");
-    if (!canDraftLaunchPack(item, userId)) {
-      throw new Error("You can only draft a launch pack for your own add, or a 1stStep starter");
-    }
+  async addHelpPacket(userId: string, input: { title: string; markdown: string }): Promise<HelpPacket> {
+    const title = input.title.trim();
+    const markdown = input.markdown.trim();
+    if (!title) throw new Error("Title cannot be empty");
+    if (!markdown) throw new Error("Packet cannot be empty");
+    if (title.length > HELP_PACKET_TITLE_MAX) throw new Error("Title is too long");
+    if (markdown.length > HELP_PACKET_MARKDOWN_MAX) throw new Error("Packet is too long");
     const author = await this.getUser(userId);
     if (!author) throw new Error("Unknown user");
-    const copy = draftLaunchCopy(item);
-    const now = Date.now();
-    const existing = await this.getLaunchPack(userId, libraryItemId);
-    if (existing) {
-      await this.db
-        .prepare(
-          `UPDATE launch_packs SET show_hn_title = ?, show_hn_body = ?, reddit_title = ?, reddit_body = ?,
-           social_short = ?, social_long = ?, friend_blurb = ?, updated_at = ? WHERE id = ?`,
-        )
-        .run(
-          copy.showHnTitle,
-          copy.showHnBody,
-          copy.redditTitle,
-          copy.redditBody,
-          copy.socialShort,
-          copy.socialLong,
-          copy.friendBlurb,
-          now,
-          existing.id,
-        );
-      return { ...existing, ...copy, updatedAt: now };
-    }
-    const pack: LaunchPack = {
+    const packet: HelpPacket = {
       id: randomUUID(),
-      libraryItemId: item.id,
       userId: author.id,
-      ...copy,
-      createdAt: now,
-      updatedAt: now,
+      title,
+      markdown,
+      createdAt: Date.now(),
     };
     await this.db
+      .prepare("INSERT INTO help_packets (id, user_id, title, markdown, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(packet.id, packet.userId, packet.title, packet.markdown, packet.createdAt);
+    return packet;
+  }
+
+  async listHelpPackets(userId: string, limit = HELP_PACKET_LIST_LIMIT): Promise<HelpPacket[]> {
+    const cap = Math.max(1, Math.min(limit, HELP_PACKET_LIST_LIMIT));
+    const rows = await this.db
       .prepare(
-        `INSERT INTO launch_packs (id, library_item_id, user_id, show_hn_title, show_hn_body, reddit_title,
-         reddit_body, social_short, social_long, friend_blurb, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `SELECT id, user_id, title, markdown, created_at
+         FROM help_packets
+         WHERE user_id = ?
+         ORDER BY created_at DESC
+         LIMIT ?`,
       )
-      .run(
-        pack.id,
-        pack.libraryItemId,
-        pack.userId,
-        pack.showHnTitle,
-        pack.showHnBody,
-        pack.redditTitle,
-        pack.redditBody,
-        pack.socialShort,
-        pack.socialLong,
-        pack.friendBlurb,
-        pack.createdAt,
-        pack.updatedAt,
-      );
-    return pack;
+      .all<HelpPacketRow>(userId, cap);
+    return rows.map(rowToHelpPacket);
+  }
+
+  async getHelpPacket(id: string): Promise<HelpPacket | undefined> {
+    const row = await this.db
+      .prepare("SELECT id, user_id, title, markdown, created_at FROM help_packets WHERE id = ?")
+      .get<HelpPacketRow>(id);
+    return row ? rowToHelpPacket(row) : undefined;
   }
 
   async addReply(topicId: string, authorId: string, body: string): Promise<ForumReply> {
@@ -932,19 +904,12 @@ interface LibraryRow {
   display_name: string;
 }
 
-interface LaunchPackRow {
+interface HelpPacketRow {
   id: string;
-  library_item_id: string;
   user_id: string;
-  show_hn_title: string;
-  show_hn_body: string;
-  reddit_title: string;
-  reddit_body: string;
-  social_short: string;
-  social_long: string;
-  friend_blurb: string;
+  title: string;
+  markdown: string;
   created_at: number;
-  updated_at: number;
 }
 
 interface TopicRow {
@@ -984,20 +949,13 @@ function rowToLibraryItem(row: LibraryRow): LibraryItem {
   };
 }
 
-function rowToLaunchPack(row: LaunchPackRow): LaunchPack {
+function rowToHelpPacket(row: HelpPacketRow): HelpPacket {
   return {
     id: row.id,
-    libraryItemId: row.library_item_id,
     userId: row.user_id,
-    showHnTitle: row.show_hn_title,
-    showHnBody: row.show_hn_body,
-    redditTitle: row.reddit_title,
-    redditBody: row.reddit_body,
-    socialShort: row.social_short,
-    socialLong: row.social_long,
-    friendBlurb: row.friend_blurb,
+    title: row.title,
+    markdown: row.markdown,
     createdAt: Number(row.created_at),
-    updatedAt: Number(row.updated_at),
   };
 }
 

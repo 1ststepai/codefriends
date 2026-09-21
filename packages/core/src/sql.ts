@@ -216,4 +216,17 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       );
     `,
   },
+  {
+    name: "010_help_packets",
+    sql: `
+      CREATE TABLE IF NOT EXISTS help_packets (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        markdown TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS help_packets_user_created ON help_packets(user_id, created_at);
+    `,
+  },
 ];

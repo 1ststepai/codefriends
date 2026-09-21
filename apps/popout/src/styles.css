@@ -330,6 +330,81 @@ h1 {
   justify-self: start;
 }
 
+.library-hero-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.library-hero-actions .primary,
+.library-hero-actions .ghost {
+  width: auto;
+}
+
+.packet-consent {
+  margin: 0 10px 10px;
+  font-size: 12px;
+}
+
+.packet-form {
+  display: grid;
+  gap: 6px;
+  padding: 0 10px 10px;
+}
+
+.packet-form input,
+.packet-form textarea {
+  width: 100%;
+  background: #1b1b1b;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px 9px;
+  outline: none;
+}
+
+.packet-form textarea {
+  resize: vertical;
+  min-height: 48px;
+  font: inherit;
+  color: inherit;
+}
+
+.packet-form input:focus,
+.packet-form textarea:focus {
+  border-color: var(--accent);
+}
+
+.packet-preview-label {
+  margin: 4px 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.packet-preview {
+  margin: 6px 10px 8px;
+  padding: 10px;
+  background: #2a2a2a;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.packet-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 10px 12px;
+}
+
+.packet-actions .primary,
+.packet-actions .ghost {
+  width: auto;
+}
+
 .library-card {
   display: grid;
   gap: 8px;

@@ -1,4 +1,4 @@
-import type { ClientKind, LibraryKind } from "@codefriends/shared";
+import { HELP_PACKET_LIBRARY_URL, type ClientKind, type LibraryKind } from "@codefriends/shared";
 import type { Store } from "./store.js";
 
 const HOUR = 3_600_000;
@@ -143,6 +143,13 @@ const OFFICIAL_LIBRARY: Array<{
     description: "The 1stStep OS foundation is in progress. Self-hosted cohorts can open this repo to learn the system.",
     url: "https://github.com/1ststepai/1ststep-os",
     kind: "github",
+  },
+  {
+    title: "Help packet",
+    description:
+      "Write a portable markdown brief so a friend can finish stuck work on their own AI usage, then send back a PR.",
+    url: HELP_PACKET_LIBRARY_URL,
+    kind: "prompt",
   },
 ];
 
