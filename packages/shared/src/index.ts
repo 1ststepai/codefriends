@@ -153,8 +153,8 @@ export function draftLaunchCopy(item: Pick<LibraryItem, "title" | "description" 
   const kind = LIBRARY_KIND_LABEL[item.kind] ?? "project";
   const together =
     item.source === "official"
-      ? `I'm learning from this 1stStep ${kind.toLowerCase()} with friends on CodeFriends — an AI coding school where we learn and ship together.`
-      : `I built this ${kind.toLowerCase()} while learning with friends on CodeFriends — an AI coding school where we learn and ship together.`;
+      ? "I'm learning from this 1stStep starter with friends on CodeFriends — an AI coding school where we learn and ship together."
+      : "I built this while learning with friends on CodeFriends — an AI coding school where we learn and ship together.";
 
   const showHnTitle = clip(`Show HN: ${title}`, SHOW_HN_TITLE_MAX);
   const showHnBody = clip(
