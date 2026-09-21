@@ -56,7 +56,7 @@ Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_
 
 **School board (v0):** Reddit-style but tiny — a topic (`title` + `body` text) and replies, SQLite only. **Any authenticated user on this instance can read and post.** That is the secure default for a self-hosted school cohort sharing one server; there is no public anonymous board. Friends-only visibility is not in v0. No upvotes, images, or live sockets — the popout loads over HTTP. Body is stored as plain text (markdown is accepted and shown as-is).
 
-**Launch pack (v0):** from a library item you added, or any 1stStep starter, generate stored draft copy (Show HN, Reddit, short social, longer post, friend-share blurb). Templates from the item title/description/url — no LLM required. **Drafts only; you post when ready.** CodeFriends does not post to X, Reddit, or HN.
+**Launch pack (v0):** from a library item you added, or any 1stStep starter, generate stored draft copy (Show HN, Reddit, short social, longer post, friend-share blurb). Default generators follow Socials Bot skeletons: `{name}`, one-line job, pain, and links from the library card. Warm and honest — no hire-us, fake metrics, or “go viral.” Optional footer: CodeFriends (invite optional). **Drafts only; you post when ready.** CodeFriends does not post to X, Reddit, or HN.
 
 **DM history cap:** each 1:1 thread keeps the last **200** messages (`CODEFRIENDS_DM_HISTORY_LIMIT`). Older rows are pruned on write. Text only — no media, no blob store.
 

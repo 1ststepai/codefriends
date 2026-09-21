@@ -142,64 +142,145 @@ export function canDraftLaunchPack(item: Pick<LibraryItem, "source" | "authorId"
   return item.source === "official" || item.authorId === userId;
 }
 
+const CODE_FRIENDS_FOOTER = "If you want company while you learn: CodeFriends (invite optional).";
+
 /** Template drafts from the library card. Education-first; no LLM. */
 export function draftLaunchCopy(item: Pick<LibraryItem, "title" | "description" | "url" | "kind" | "source">): Omit<
   LaunchPack,
   "id" | "libraryItemId" | "userId" | "createdAt" | "updatedAt"
 > {
-  const title = item.title.trim();
-  const description = item.description.trim();
+  const name = item.title.trim();
+  const what = item.description.trim();
+  const job = oneLine(item.description);
+  const pain = uncapitalize(job);
   const url = item.url.trim();
   const kind = LIBRARY_KIND_LABEL[item.kind] ?? "project";
-  const together =
-    item.source === "official"
-      ? "I'm learning from this 1stStep starter with friends on CodeFriends — an AI coding school where we learn and ship together."
-      : "I built this while learning with friends on CodeFriends — an AI coding school where we learn and ship together.";
+  const audience = whoItsFor(item.kind, item.source);
+  const free = freeLine(item.source, item.kind);
+  const limit = honestLimit(item.source);
+  const steps = howToTry(item.kind, url);
+  const built = item.source === "official" ? "I'm sharing" : "I built";
+  const soPain = item.source === "official" ? `${withArticle(pain)} is easy to try` : `I could share ${pain}`;
 
-  const showHnTitle = clip(`Show HN: ${title}`, SHOW_HN_TITLE_MAX);
+  const showHnPrefix = `Show HN: ${name} – `;
+  const showHnTitle =
+    showHnPrefix.length >= SHOW_HN_TITLE_MAX
+      ? clip(`Show HN: ${name}`, SHOW_HN_TITLE_MAX)
+      : `${showHnPrefix}${clip(job, SHOW_HN_TITLE_MAX - showHnPrefix.length)}`;
+
   const showHnBody = clip(
-    [description, "", url, "", `${together} Happy to walk through what we tried. Feedback welcome.`].join("\n"),
-    LAUNCH_BODY_MAX,
-  );
-
-  const redditTitle = clip(`${title} (${kind}) — looking for feedback from people learning to ship`, REDDIT_TITLE_MAX);
-  const redditBody = clip(
     [
-      description,
+      what,
       "",
-      url,
+      `Who it's for: ${audience}`,
       "",
-      `${together} If you have time, I'd love notes on what to improve next.`,
+      "How to try it:",
+      ...steps.map((step) => `- ${step}`),
+      "",
+      `What's free: ${free}`,
+      "",
+      `Honest limit: ${limit}`,
+      "",
+      CODE_FRIENDS_FOOTER,
+      "",
+      "Happy to answer questions.",
     ].join("\n"),
     LAUNCH_BODY_MAX,
   );
 
-  const socialShort = fitBeforeUrl(
-    `${title} — ${description} Learn and ship together on CodeFriends.`,
-    url,
-    SOCIAL_SHORT_MAX,
+  const redditTitle = clip(`${built} ${name} so ${soPain}`, REDDIT_TITLE_MAX);
+  const redditBody = clip(
+    [
+      `Problem I kept hitting: ${pain}.`,
+      "",
+      "What I shipped:",
+      `- ${name} (${kind})`,
+      `- ${job}`,
+      `- Public link: ${url}`,
+      "",
+      "Link + how to run in <5 min:",
+      ...steps.map((step) => `- ${step}`),
+      "",
+      "What I still want feedback on: If you try it, what's the first thing that confused you?",
+      "",
+      CODE_FRIENDS_FOOTER,
+    ].join("\n"),
+    LAUNCH_BODY_MAX,
   );
+
+  const socialShort = fitBeforeUrl(`${name} — ${job}`, url, SOCIAL_SHORT_MAX);
   const socialLong = clip(
     [
-      `I shared ${title} in the CodeFriends library.`,
+      `${built} ${name} so ${soPain}.`,
       "",
-      description,
+      what,
       "",
-      url,
+      `Try it: ${url}`,
       "",
-      `${together} If you're building something too, I'd love to trade notes — no hype, just the work.`,
+      `What's free: ${free}`,
+      "",
+      `Honest limit: ${limit}`,
+      "",
+      CODE_FRIENDS_FOOTER,
     ].join("\n"),
     LAUNCH_BODY_MAX,
   );
 
   const friendBlurb = clip(
     item.source === "official"
-      ? `I'm starting from "${title}" on the 1stStep shelf: ${url} Want to look it over together and ship the next slice?`
-      : `I added "${title}" to the library: ${url} Want to look it over together and help me ship the next slice?`,
+      ? `I'm starting from the 1stStep starter "${name}" — ${job}. ${url} Want to look it over together?`
+      : `I added "${name}" to the library — ${job}. ${url} Want to try it together?`,
     FRIEND_BLURB_MAX,
   );
 
   return { showHnTitle, showHnBody, redditTitle, redditBody, socialShort, socialLong, friendBlurb };
+}
+
+function oneLine(raw: string): string {
+  const collapsed = raw.replace(/\s+/g, " ").trim();
+  const clause = collapsed.split(/\s+[—–]\s+|:\s+|\.\s+/)[0] ?? collapsed;
+  return clause.replace(/[.?!:;]+$/, "");
+}
+
+function uncapitalize(raw: string): string {
+  if (!raw) return raw;
+  return raw.charAt(0).toLowerCase() + raw.slice(1);
+}
+
+function withArticle(raw: string): string {
+  if (/^(a|an|the)\b/i.test(raw)) return raw;
+  return /^[aeiou]/i.test(raw) ? `an ${raw}` : `a ${raw}`;
+}
+
+function whoItsFor(kind: LibraryKind, source: LibrarySource): string {
+  if (source === "official") {
+    return "New AI users and solo builders who want a first-week starter they can clone, not a product tour.";
+  }
+  if (kind === "chatgpt") return "People already in ChatGPT who want a project they can open and learn from.";
+  if (kind === "prompt") return "New AI users who want a prompt they can paste into a tool they already use.";
+  if (kind === "demo") return "Solo builders who learn faster by clicking a running example.";
+  if (kind === "github") return "Solo builders who want a public repo they can clone and run.";
+  return "New AI users and solo builders who want a public link to try.";
+}
+
+function freeLine(source: LibrarySource, kind: LibraryKind): string {
+  if (source === "official" || kind === "github") {
+    return "Public link — free to open or clone. I don't have a paid plan attached.";
+  }
+  return "The link is public. I didn't attach a price.";
+}
+
+function honestLimit(source: LibrarySource): string {
+  if (source === "official") return "It's a starter, not a complete product.";
+  return "I don't have user counts or a polished onboarding story yet — it's early.";
+}
+
+function howToTry(kind: LibraryKind, url: string): string[] {
+  if (kind === "github") return [`Open ${url}`, "Clone the repo", "Follow the README — aim for under 5 minutes"];
+  if (kind === "chatgpt") return [`Open ${url}`, "Skim the shared project", "Run one prompt yourself"];
+  if (kind === "demo") return [`Open ${url}`, "Click through once", "Note the first thing you'd change"];
+  if (kind === "prompt") return [`Open ${url}`, "Copy one prompt", "Paste it into the tool you already use"];
+  return [`Open ${url}`, "Skim the page", "Try the first step you see"];
 }
 
 function clip(text: string, max: number): string {

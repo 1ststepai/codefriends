@@ -716,14 +716,23 @@ async function buildLibrary(dbPath: string) {
       "generate launch pack",
     );
     const pack = generated.pack;
-    assert.ok(pack.showHnTitle.startsWith("Show HN:"), "Show HN title");
+    assert.match(pack.showHnTitle, /^Show HN: .+ – /);
+    assert.match(pack.showHnBody, /Who it's for:/);
+    assert.match(pack.showHnBody, /How to try it:/);
+    assert.match(pack.showHnBody, /What's free:/);
+    assert.match(pack.showHnBody, /Honest limit:/);
+    assert.match(pack.showHnBody, /Happy to answer questions/);
     assert.match(pack.showHnBody, /chatgpt\.com\/share\/example-lesson/);
-    assert.ok(pack.redditTitle.includes("ChatGPT"));
-    assert.match(pack.redditBody, /learn and ship together/i);
+    assert.match(pack.redditTitle, /^I built .+ so /);
+    assert.match(pack.redditBody, /Problem I kept hitting:/);
+    assert.match(pack.redditBody, /What I shipped:/);
+    assert.match(pack.redditBody, /<5 min/);
+    assert.match(pack.redditBody, /what's the first thing that confused you/i);
     assert.ok(pack.socialShort.length > 0 && pack.socialShort.length <= 280, "X-length social");
-    assert.ok(pack.socialLong.includes("CodeFriends"));
+    assert.match(pack.socialLong, /CodeFriends \(invite optional\)/);
     assert.ok(pack.friendBlurb.includes("library"));
-    const banned = /go viral|casino|steam clone/i;
+    const banned =
+      /go viral|casino|gambling|guaranteed reach|beats (cursor|claude)|hire us|book a call|crushing it|steam clone|testimonial/i;
     for (const field of [
       pack.showHnTitle,
       pack.showHnBody,
@@ -733,7 +742,7 @@ async function buildLibrary(dbPath: string) {
       pack.socialLong,
       pack.friendBlurb,
     ]) {
-      assert.equal(banned.test(field), false, "education-first copy");
+      assert.equal(banned.test(field), false, "honest defaults");
     }
 
     const fetched = await json<{ pack: { id: string; showHnTitle: string; socialShort: string } }>(
@@ -758,7 +767,9 @@ async function buildLibrary(dbPath: string) {
 
     const officialId = listed.items.find((item) => item.source === "official")?.id;
     assert.ok(officialId);
-    const officialPack = await json<{ pack: { socialShort: string; friendBlurb: string } }>(
+    const officialPack = await json<{
+      pack: { socialShort: string; friendBlurb: string; redditTitle: string; showHnTitle: string };
+    }>(
       await fetch(`${server.url}/api/library/${officialId}/launch-pack`, {
         method: "POST",
         headers: { authorization: `Bearer ${kit.token}` },
@@ -766,7 +777,9 @@ async function buildLibrary(dbPath: string) {
       "kit can draft an official starter",
     );
     assert.ok(officialPack.pack.socialShort.length > 0);
-    assert.match(officialPack.pack.friendBlurb, /1stStep shelf|starter/i);
+    assert.match(officialPack.pack.friendBlurb, /1stStep starter|starter/i);
+    assert.match(officialPack.pack.redditTitle, /^I'm sharing .+ so /);
+    assert.match(officialPack.pack.showHnTitle, /^Show HN: .+ – /);
 
     const withIds = await json<{ items: Array<{ id: string; source: string }> }>(
       await fetch(`${server.url}/api/library`, {

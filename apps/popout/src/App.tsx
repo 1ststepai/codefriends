@@ -1714,7 +1714,7 @@ function LaunchPackPanel({
           />
           <CopyField
             label="Reddit title"
-            hint="Generic r/SideProject or r/ChatGPTCoding style — pick the sub when you post"
+            hint="Generic r/SideProject, r/ChatGPT, or r/LocalLLaMA style — match sub rules when you post"
             value={drafts.redditTitle}
             rows={2}
             onChange={(redditTitle) => onChange({ ...drafts, redditTitle })}
