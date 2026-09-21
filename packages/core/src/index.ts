@@ -1,6 +1,6 @@
 export { applyMigrations, type SqlClient, type SqlStatement } from "./sql.js";
 export { Store, lastSeenLabel, type UserRecord } from "./store.js";
-export { seedDemo, DEMO_USERNAMES } from "./seed.js";
+export { seedDemo, seedOfficialLibrary, DEMO_USERNAMES, OFFICIAL_LIBRARY_USERNAME } from "./seed.js";
 export {
   defaultRuntimeConfig,
   clampHistoryLimit,

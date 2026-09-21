@@ -8,6 +8,7 @@ import {
   handleHttp,
   MemoryPresence,
   seedDemo,
+  seedOfficialLibrary,
   Store,
   type RuntimeConfig,
   type SqlClient,
@@ -46,6 +47,7 @@ export async function startServer(opts?: {
   await applyMigrations(db);
   const store = new Store(db, config, new MemoryPresence());
 
+  await seedOfficialLibrary(store);
   if (opts?.seed ?? process.env.CODEFRIENDS_SEED !== "0") {
     await seedDemo(store);
   }

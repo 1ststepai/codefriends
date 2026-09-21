@@ -586,6 +586,124 @@ async function schoolBoard(dbPath: string) {
   }
 }
 
+async function buildLibrary(dbPath: string) {
+  const server = await startServer({
+    port: 0,
+    seed: false,
+    dbPath,
+    config: { dbPath, devLogin: true },
+  });
+  try {
+    const maya = await login(server.url, "maya");
+    const kit = await login(server.url, "kit");
+
+    const denied = await fetch(`${server.url}/api/library`);
+    assert.equal(denied.status, 401, "library is signed-in only");
+
+    const listed = await json<{
+      items: Array<{ title: string; source: string; url: string; authorUsername: string }>;
+    }>(
+      await fetch(`${server.url}/api/library`, {
+        headers: { authorization: `Bearer ${kit.token}` },
+      }),
+      "list official shelf as user B",
+    );
+    const official = listed.items.filter((item) => item.source === "official");
+    assert.ok(official.length >= 4, "official 1stStep starters must be seeded");
+    assert.equal(official[0]?.url, "https://github.com/1ststepai/ai-user-starter-kit");
+    assert.ok(official.every((item) => item.authorUsername === "1ststep"));
+    assert.ok(listed.items.every((item) => item.source === "official"));
+
+    const created = await json<{ item: { id: string; title: string; source: string; authorUsername: string } }>(
+      await fetch(`${server.url}/api/library`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${maya.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "Maya’s ChatGPT project",
+          description: "A lesson we built together this week.",
+          url: "https://chatgpt.com/share/example-lesson",
+          kind: "chatgpt",
+        }),
+      }),
+      "create community item as user A",
+    );
+    assert.equal(created.item.source, "community");
+    assert.equal(created.item.authorUsername, "maya");
+
+    const asKit = await json<{ items: Array<{ id: string; source: string; title: string }> }>(
+      await fetch(`${server.url}/api/library`, {
+        headers: { authorization: `Bearer ${kit.token}` },
+      }),
+      "list as user B after community add",
+    );
+    assert.equal(asKit.items[0].source, "official");
+    assert.ok(asKit.items.some((item) => item.id === created.item.id && item.title.includes("ChatGPT")));
+
+    const badJs = await fetch(`${server.url}/api/library`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${maya.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "nope",
+        description: "script",
+        url: "javascript:alert(1)",
+        kind: "other",
+      }),
+    });
+    assert.equal(badJs.status, 400, "javascript: URL rejected");
+
+    const badHttp = await fetch(`${server.url}/api/library`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${maya.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "nope",
+        description: "insecure",
+        url: "http://example.com/demo",
+        kind: "demo",
+      }),
+    });
+    assert.equal(badHttp.status, 400, "http URL rejected");
+
+    const steal = await fetch(`${server.url}/api/library/${created.item.id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${kit.token}` },
+    });
+    assert.equal(steal.status, 403, "cannot delete someone else's item");
+
+    const withIds = await json<{ items: Array<{ id: string; source: string }> }>(
+      await fetch(`${server.url}/api/library`, {
+        headers: { authorization: `Bearer ${maya.token}` },
+      }),
+      "reload ids",
+    );
+    const seeded = withIds.items.find((item) => item.source === "official");
+    assert.ok(seeded);
+    const dropOfficial = await fetch(`${server.url}/api/library/${seeded.id}`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${maya.token}` },
+    });
+    assert.equal(dropOfficial.status, 403, "cannot delete official shelf item");
+
+    await json<{ ok: boolean }>(
+      await fetch(`${server.url}/api/library/${created.item.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${maya.token}` },
+      }),
+      "delete own community item",
+    );
+  } finally {
+    await server.close();
+  }
+}
+
 async function servePopout(dbPath: string) {
   const popoutDir = mkdtempSync(join(tmpdir(), "codefriends-popout-"));
   mkdirSync(join(popoutDir, "assets"), { recursive: true });
@@ -628,9 +746,10 @@ async function main() {
   await historyCap(join(dir, "cap.sqlite"));
   await inviteAndStatus(join(dir, "invite.sqlite"));
   await schoolBoard(join(dir, "board.sqlite"));
+  await buildLibrary(join(dir, "library.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, popout static served",
   );
 }
 

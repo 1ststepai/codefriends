@@ -52,7 +52,7 @@ function withCors(request: Request, config: RuntimeConfig, response: Response): 
   const headers = new Headers(response.headers);
   headers.set("Access-Control-Allow-Origin", allowedCorsOrigin(request, config));
   headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  headers.set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   headers.set("Access-Control-Max-Age", "86400");
   headers.set("Vary", "Origin");
   return new Response(response.body, { status: response.status, headers });
@@ -376,6 +376,43 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
     const found = await store.getTopic(decodeURIComponent(topicOne[1]));
     if (!found) return json({ error: "Topic not found" }, 404);
     return json(found);
+  }
+
+  if (method === "GET" && path === "/api/library") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    return json({ items: await store.listLibraryItems() });
+  }
+
+  if (method === "POST" && path === "/api/library") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const item = await store.addLibraryItem(user.id, {
+        title: textField(body.title),
+        description: textField(body.description),
+        url: textField(body.url),
+        kind: textField(body.kind),
+      });
+      return json({ item });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not add to the library" }, 400);
+    }
+  }
+
+  const libraryOne = /^\/api\/library\/([^/]+)$/.exec(path);
+  if (method === "DELETE" && libraryOne) {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      await store.deleteLibraryItem(user.id, decodeURIComponent(libraryOne[1]));
+      return json({ ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not remove item";
+      const status = message === "Item not found" ? 404 : message.includes("your own") ? 403 : 400;
+      return json({ error: message }, status);
+    }
   }
 
   if (method === "GET" && path === "/api/presence") {
