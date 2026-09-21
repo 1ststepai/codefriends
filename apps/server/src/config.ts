@@ -26,6 +26,12 @@ export interface ServerConfig extends RuntimeConfig {
   /** Directory of a built `apps/popout` (`dist`). Served when `index.html` exists. */
   popoutDir: string;
   servePopout: boolean;
+  /** Shared secret for `/metrics` and `/admin`. Empty = those routes 404. */
+  adminToken: string;
+  /** Daily JSONL samples/alerts. null = in-memory only (`:memory:` DBs). */
+  monitorDir: string | null;
+  /** If this file exists, alert lines are appended. Missing path is a no-op. */
+  agentMemoryPath: string;
 }
 
 export function isProduction(): boolean {
@@ -40,10 +46,16 @@ export function defaultPopoutDir(): string {
   return resolve(here, "../../popout/dist");
 }
 
-/** `/health` and `/api/*` stay on the JSON API; everything else can be the SPA. */
+export function defaultMonitorDir(dbPath: string, override?: string): string | null {
+  if (override) return override;
+  if (!dbPath || dbPath === ":memory:") return null;
+  return join(dirname(dbPath), "monitor");
+}
+
+/** `/health`, `/metrics`, `/admin*`, and `/api/*` stay on the JSON API; everything else can be the SPA. */
 export function isApiHttpPath(pathname: string): boolean {
   const path = pathname.replace(/\/$/, "") || "/";
-  return path === "/health" || path.startsWith("/api");
+  return path === "/health" || path === "/metrics" || path.startsWith("/admin") || path.startsWith("/api");
 }
 
 export function loadConfig(
@@ -74,23 +86,37 @@ export function loadConfig(
     storeKind,
     corsOrigins: overrides?.corsOrigins ?? parseCorsOrigins(process.env.CODEFRIENDS_CORS_ORIGINS),
     google: {
-      clientId: process.env.GEMINI_GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GEMINI_GOOGLE_CLIENT_SECRET ?? "",
-      callbackUrl: process.env.GEMINI_GOOGLE_CALLBACK_URL ?? `${publicUrl}/api/auth/gemini/callback`,
+      clientId: overrides?.google?.clientId ?? process.env.GEMINI_GOOGLE_CLIENT_ID ?? "",
+      clientSecret: overrides?.google?.clientSecret ?? process.env.GEMINI_GOOGLE_CLIENT_SECRET ?? "",
+      callbackUrl:
+        overrides?.google?.callbackUrl ??
+        process.env.GEMINI_GOOGLE_CALLBACK_URL ??
+        `${publicUrl}/api/auth/gemini/callback`,
     },
   });
 
   const popoutDir = overrides?.popoutDir ?? process.env.CODEFRIENDS_POPOUT_DIR ?? defaultPopoutDir();
   const servePopout = overrides?.servePopout ?? existsSync(join(popoutDir, "index.html"));
+  const dbPath = overrides?.dbPath ?? process.env.CODEFRIENDS_DB ?? defaultDbPath();
+  const monitorDir =
+    overrides && "monitorDir" in overrides
+      ? (overrides.monitorDir ?? null)
+      : defaultMonitorDir(dbPath, process.env.CODEFRIENDS_MONITOR_DIR);
 
   return {
     ...base,
-    dbPath: overrides?.dbPath ?? process.env.CODEFRIENDS_DB ?? defaultDbPath(),
+    dbPath,
     libsqlUrl,
     libsqlAuthToken: overrides?.libsqlAuthToken ?? process.env.CODEFRIENDS_LIBSQL_AUTH_TOKEN ?? "",
     host,
     port,
     popoutDir,
     servePopout,
+    adminToken: overrides?.adminToken !== undefined ? overrides.adminToken : (process.env.CODEFRIENDS_ADMIN_TOKEN ?? ""),
+    monitorDir,
+    agentMemoryPath:
+      overrides?.agentMemoryPath !== undefined
+        ? overrides.agentMemoryPath
+        : (process.env.CODEFRIENDS_AGENT_MEMORY_PATH ?? ""),
   };
 }

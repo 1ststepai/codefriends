@@ -132,6 +132,17 @@ npm run dev
 - API + WebSocket: <http://127.0.0.1:8787>
 - Popout UI: <http://127.0.0.1:5173> (proxies `/api` and `/ws` to the server)
 - SQLite file: `apps/server/data/codefriends.sqlite`
+- Admin monitor: <http://127.0.0.1:8787/admin> — set `CODEFRIENDS_ADMIN_TOKEN` in `.env` first (see below)
+
+### Admin monitor
+
+Private health page for whoever runs `apps/server`. It is **not** in the popout.
+
+1. Put a long random secret in `.env` as `CODEFRIENDS_ADMIN_TOKEN`. Unset → `/admin` and `/metrics` are 404.
+2. Open <http://127.0.0.1:8787/admin> (or `/admin/monitor`) and paste the token, or `curl -H 'Authorization: Bearer …' http://127.0.0.1:8787/metrics`.
+3. Same-origin cookie is `HttpOnly` / `SameSite=Strict`. A normal CodeFriends login session cannot open this page.
+
+Windows self-host notes: [docs/self-host-windows.md](docs/self-host-windows.md). Spec + field meanings: [docs/monitoring-dashboard.md](docs/monitoring-dashboard.md).
 
 ### Desktop app (native window + tray)
 
@@ -241,7 +252,7 @@ npm run smoke
 npm run test:connect
 ```
 
-Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served`
+Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served, admin metrics gated`
 
 `test:connect` prints the documented prompt paths (first run, Not now cooldown, Don’t ask again, already connected, host popout URLs).
 
@@ -251,6 +262,8 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 | --- | --- | --- |
 | `GET` | `/` (and other non-API paths) | Built popout from `apps/popout/dist` when `index.html` exists; otherwise JSON 404 |
 | `GET` | `/health` | Liveness + online count + `store` (`sqlite` / `libsql` / `d1`) + `dmHistoryLimit` |
+| `GET` | `/metrics` | Admin JSON. 404 unless `CODEFRIENDS_ADMIN_TOKEN` matches Bearer / `X-Admin-Token` / cookie. Node server only |
+| `GET` | `/admin` | Admin dashboard (login form if no cookie). Alias: `/admin/monitor`. Node server only |
 | `GET` | `/api/auth/providers` | Catalog: live / unconfigured / blocked / dev / mock |
 | `POST` | `/api/auth/login` | Dev only. `{ username, displayName?, client? }` → `{ token, user }` |
 | `GET` | `/api/auth/gemini/start` | Google OIDC (needs env). `?link=1&token=` to attach to the current user |

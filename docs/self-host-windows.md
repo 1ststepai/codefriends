@@ -71,6 +71,10 @@ CODEFRIENDS_DEV_LOGIN=1
 CODEFRIENDS_SEED=1
 CODEFRIENDS_MOCK_PROVIDERS=0
 
+# Private monitor at /admin and GET /metrics. Unset = those routes 404.
+# Use a long random secret. A normal popout login cannot open this page.
+# CODEFRIENDS_ADMIN_TOKEN=
+
 # Leave VITE_* unset so the built popout uses same-origin /api and /ws.
 ```
 
@@ -120,6 +124,7 @@ If you see `Popout static: off`, `apps/popout/dist/index.html` is missing — re
 | --- | --- |
 | http://127.0.0.1:8787/health | JSON `{ "ok": true, "store": "sqlite", … }` |
 | http://127.0.0.1:8787/ | Popout login (static SPA) |
+| http://127.0.0.1:8787/admin | Private monitor (404 until `CODEFRIENDS_ADMIN_TOKEN` is set) |
 | Sign in as `maya` | Friends list; seed roster is already friends |
 
 Leave that Command Prompt open. Closing it stops the server.
@@ -129,6 +134,20 @@ Optional fake “agents online” (second window):
 ```bat
 npm run demo:agents
 ```
+
+### Admin monitor (this PC only)
+
+The popout has no link to this. Bookmark it.
+
+1. Set `CODEFRIENDS_ADMIN_TOKEN` in `.env` to a long random value (not a user password — there is no admin role).
+2. Restart the Node server. The log line should say `Admin monitor: http://127.0.0.1:8787/admin`.
+3. Open [http://127.0.0.1:8787/admin](http://127.0.0.1:8787/admin) on the PC (works even if the tunnel is down) and paste the token. Or:
+
+```bat
+curl -s -H "Authorization: Bearer YOUR_TOKEN" http://127.0.0.1:8787/metrics
+```
+
+If the token is unset or wrong, `/admin` and `/metrics` return **404** (empty), same as an unknown path — not the popout. Samples land in `<dir of CODEFRIENDS_DB>\monitor\` (override with `CODEFRIENDS_MONITOR_DIR`). Details: [monitoring-dashboard.md](./monitoring-dashboard.md).
 
 ## 5. Cloudflare Tunnel
 

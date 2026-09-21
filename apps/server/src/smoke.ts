@@ -11,6 +11,7 @@ import { WebSocket } from "ws";
 import type { LinkedIdentity, WsServerMessage } from "@codefriends/shared";
 import { HELP_PACKET_SECTION_HEADINGS } from "@codefriends/shared";
 import { startServer } from "./app.js";
+import { runMonitorTests } from "./monitor.test.js";
 
 async function login(base: string, username: string) {
   const res = await fetch(`${base}/api/auth/login`, {
@@ -832,7 +833,7 @@ async function servePopout(dbPath: string) {
     port: 0,
     seed: false,
     dbPath,
-    config: { dbPath, devLogin: true, popoutDir, servePopout: true },
+    config: { dbPath, devLogin: true, popoutDir, servePopout: true, adminToken: "", monitorDir: null },
   });
   try {
     const home = await fetch(`${server.url}/`);
@@ -856,6 +857,13 @@ async function servePopout(dbPath: string) {
 
     const desktop = await fetch(`${server.url}/health`, { headers: { Origin: "tauri://localhost" } });
     assert.equal(desktop.headers.get("access-control-allow-origin"), "tauri://localhost");
+
+    const metrics = await fetch(`${server.url}/metrics`);
+    assert.equal(metrics.status, 404, "metrics stays hidden when admin token is unset");
+    assert.doesNotMatch(await metrics.text(), /<p>ok<\/p>/);
+    const admin = await fetch(`${server.url}/admin`);
+    assert.equal(admin.status, 404, "admin stays hidden when admin token is unset");
+    assert.doesNotMatch(await admin.text(), /<p>ok<\/p>/);
   } finally {
     await server.close();
   }
@@ -870,8 +878,9 @@ async function main() {
   await buildLibrary(join(dir, "library.sqlite"));
   await helpPackets(join(dir, "help-packets.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
+  await runMonitorTests();
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served, admin metrics gated",
   );
 }
 

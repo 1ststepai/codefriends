@@ -12,6 +12,11 @@ console.log(
     ? `Popout static: ${server.config.popoutDir}`
     : "Popout static: off (build apps/popout, or set CODEFRIENDS_POPOUT_DIR to a folder with index.html)",
 );
+console.log(
+  server.config.adminToken
+    ? `Admin monitor: ${server.url}/admin  (CODEFRIENDS_ADMIN_TOKEN)`
+    : "Admin monitor: off (set CODEFRIENDS_ADMIN_TOKEN to enable /admin and /metrics)",
+);
 console.log("Demo users (already friends): maya, devjay, sam, rio, alex, casey, taylor, jordan, parker");
 
 const shutdown = async () => {
