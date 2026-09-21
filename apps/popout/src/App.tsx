@@ -356,7 +356,10 @@ export function App() {
     return (
       <div className="shell login">
         <header className="login-brand">
-          <img className="brand-lockup" src="/brand/logo-lockup.png" alt="codefriends.1ststep.ai" />
+          <span className="login-mark" aria-hidden="true">
+            <img src="/brand/logo-lockup.png" alt="" />
+          </span>
+          <p className="login-wordmark">CodeFriends</p>
         </header>
         <h1>Opening your session…</h1>
       </div>
@@ -679,7 +682,10 @@ function Login({
   return (
     <div className="shell login">
       <header className="login-brand">
-        <img className="brand-lockup" src="/brand/logo-lockup.png" alt="codefriends.1ststep.ai" />
+        <span className="login-mark" aria-hidden="true">
+          <img src="/brand/logo-lockup.png" alt="" />
+        </span>
+        <p className="login-wordmark">CodeFriends</p>
       </header>
       <div className="kicker">Learn together</div>
       <h1>An AI coding school with your friends in the room</h1>
