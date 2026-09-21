@@ -41,6 +41,14 @@ export interface PublicUser {
   githubUrl: string;
   website: string;
   tools: string[];
+  twitterUrl: string;
+  facebookUrl: string;
+  telegramUrl: string;
+  whatsappUrl: string;
+  currentlyBuilding: string;
+  ownsBusiness: boolean;
+  businessNote: string;
+  wantsToHelpOthersBuild: boolean;
   identities?: LinkedIdentity[];
 }
 
@@ -175,24 +183,103 @@ export function parseTools(raw: unknown): string[] {
   return tools;
 }
 
-export function cleanHttpUrl(raw: string, host?: string): string {
+export function cleanHttpUrl(raw: string, host?: string | string[]): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
   if (trimmed.length > PROFILE_URL_MAX) throw new Error("URL is too long");
+  const url = parseHttpUrl(trimmed);
+  if (host && !hostMatches(url, host)) {
+    const allowed = Array.isArray(host) ? host.join(" or ") : host;
+    throw new Error(`URL must be on ${allowed}`);
+  }
+  return url.toString();
+}
+
+export type SocialKind = "twitter" | "facebook" | "telegram" | "whatsapp";
+
+/** Accept a https URL, or a handle/phone for Twitter/X, Telegram, and WhatsApp. */
+export function cleanSocialUrl(raw: string, kind: SocialKind): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (trimmed.length > PROFILE_URL_MAX) throw new Error("URL is too long");
+  const url = parseHttpUrl(trimmed, { optional: true });
+  if (kind === "twitter") {
+    const handle = url
+      ? (hostMatches(url, ["x.com", "twitter.com"]) ? pathHandle(url) : "")
+      : trimmed.replace(/^@/, "");
+    if (!/^[A-Za-z0-9_]{1,15}$/.test(handle)) {
+      throw new Error("Enter a Twitter/X @handle or https://x.com/… URL");
+    }
+    return `https://x.com/${handle}`;
+  }
+  if (kind === "facebook") {
+    if (!url || !hostMatches(url, ["facebook.com", "fb.com", "m.facebook.com", "fb.me"])) {
+      throw new Error("Enter a Facebook https URL");
+    }
+    return url.toString();
+  }
+  if (kind === "telegram") {
+    if (url) {
+      if (!hostMatches(url, ["t.me", "telegram.me", "telegram.dog"])) {
+        throw new Error("Telegram URL must be on t.me");
+      }
+      return url.toString();
+    }
+    const username = trimmed.replace(/^@/, "");
+    if (!/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(username)) {
+      throw new Error("Enter a Telegram @username or https://t.me/… URL");
+    }
+    return `https://t.me/${username}`;
+  }
+  if (url) {
+    if (!hostMatches(url, ["wa.me", "api.whatsapp.com", "whatsapp.com", "web.whatsapp.com"])) {
+      throw new Error("WhatsApp URL must be on wa.me");
+    }
+    return url.toString();
+  }
+  const digits = trimmed.replace(/[^\d]/g, "");
+  if (digits.length < 8 || digits.length > 15) {
+    throw new Error("Enter a phone number or https://wa.me/… URL");
+  }
+  return `https://wa.me/${digits}`;
+}
+
+function parseHttpUrl(raw: string): URL;
+function parseHttpUrl(raw: string, opts: { optional: true }): URL | undefined;
+function parseHttpUrl(raw: string, opts?: { optional?: boolean }): URL | undefined {
+  const candidate = hasScheme(raw)
+    ? raw
+    : /^[\w.-]+\.[a-z]{2,}([/:?#]|$)/i.test(raw)
+      ? `https://${raw}`
+      : "";
+  if (!candidate) {
+    if (opts?.optional) return undefined;
+    throw new Error("Enter a full http(s) URL");
+  }
   let url: URL;
   try {
-    url = new URL(trimmed);
+    url = new URL(candidate);
   } catch {
     throw new Error("Enter a full http(s) URL");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("URL must be http(s)");
   }
-  if (host) {
-    const hostname = url.hostname.replace(/^www\./, "");
-    if (hostname !== host) throw new Error(`URL must be on ${host}`);
-  }
-  return url.toString();
+  return url;
+}
+
+function hasScheme(raw: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:/i.test(raw);
+}
+
+function hostMatches(url: URL, host: string | string[]): boolean {
+  const hostname = url.hostname.replace(/^www\./, "").toLowerCase();
+  const allowed = (Array.isArray(host) ? host : [host]).map((item) => item.replace(/^www\./, "").toLowerCase());
+  return allowed.includes(hostname);
+}
+
+function pathHandle(url: URL): string {
+  return url.pathname.split("/").filter(Boolean)[0] ?? "";
 }
 
 export function invitePopoutUrl(popoutUrl: string, token: string): string {

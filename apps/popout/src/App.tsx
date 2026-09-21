@@ -484,9 +484,9 @@ function Login({
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
         Learn with friends while you use Cursor, Claude, Codex, or Gemini. Presence, DMs, a short
-        profile (GitHub / tools), and a school board for the cohort — prompt/knowledge base and
-        learning paths next. One CodeFriends user can link several of those identities so you stay
-        a single person in the room.
+        profile (GitHub / tools / optional socials), and a school board for the cohort —
+        prompt/knowledge base and learning paths next. One CodeFriends user can link several of
+        those identities so you stay a single person in the room.
       </p>
       {inviteFrom ? (
         <p className="lede highlight">
@@ -724,6 +724,28 @@ function SelfBar({
   );
 }
 
+const PROFILE_URL_FIELDS = [
+  { key: "githubUrl", label: "GitHub", placeholder: "https://github.com/you" },
+  { key: "website", label: "Website", placeholder: "https://" },
+  { key: "twitterUrl", label: "Twitter / X", placeholder: "@handle or https://x.com/you" },
+  { key: "facebookUrl", label: "Facebook", placeholder: "https://facebook.com/you" },
+  { key: "telegramUrl", label: "Telegram", placeholder: "@username or https://t.me/you" },
+  { key: "whatsappUrl", label: "WhatsApp", placeholder: "phone or https://wa.me/…" },
+] as const;
+
+type ProfileUrlKey = (typeof PROFILE_URL_FIELDS)[number]["key"];
+
+function profileUrlState(self: PublicUser): Record<ProfileUrlKey, string> {
+  return {
+    githubUrl: self.githubUrl ?? "",
+    website: self.website ?? "",
+    twitterUrl: self.twitterUrl ?? "",
+    facebookUrl: self.facebookUrl ?? "",
+    telegramUrl: self.telegramUrl ?? "",
+    whatsappUrl: self.whatsappUrl ?? "",
+  };
+}
+
 function ProfileEditor({
   self,
   token,
@@ -735,17 +757,35 @@ function ProfileEditor({
   onSaved: (user: PublicUser) => void;
   onError: (msg: string) => void;
 }) {
-  const [githubUrl, setGithubUrl] = useState(self.githubUrl ?? "");
-  const [website, setWebsite] = useState(self.website ?? "");
+  const [urls, setUrls] = useState(() => profileUrlState(self));
   const [tools, setTools] = useState((self.tools ?? []).join(", "));
+  const [currentlyBuilding, setCurrentlyBuilding] = useState(self.currentlyBuilding ?? "");
+  const [ownsBusiness, setOwnsBusiness] = useState(Boolean(self.ownsBusiness));
+  const [businessNote, setBusinessNote] = useState(self.businessNote ?? "");
+  const [wantsToHelp, setWantsToHelp] = useState(Boolean(self.wantsToHelpOthersBuild));
 
   useEffect(() => {
-    setGithubUrl(self.githubUrl ?? "");
-    setWebsite(self.website ?? "");
+    setUrls(profileUrlState(self));
     setTools((self.tools ?? []).join(", "));
-  }, [self.githubUrl, self.website, self.tools]);
+    setCurrentlyBuilding(self.currentlyBuilding ?? "");
+    setOwnsBusiness(Boolean(self.ownsBusiness));
+    setBusinessNote(self.businessNote ?? "");
+    setWantsToHelp(Boolean(self.wantsToHelpOthersBuild));
+  }, [
+    self.githubUrl,
+    self.website,
+    self.twitterUrl,
+    self.facebookUrl,
+    self.telegramUrl,
+    self.whatsappUrl,
+    self.tools,
+    self.currentlyBuilding,
+    self.ownsBusiness,
+    self.businessNote,
+    self.wantsToHelpOthersBuild,
+  ]);
 
-  const save = async (patch: { githubUrl?: string; website?: string; tools?: string }) => {
+  const save = async (patch: Parameters<typeof updateProfile>[1]) => {
     onError("");
     try {
       onSaved(await updateProfile(token, patch));
@@ -756,30 +796,20 @@ function ProfileEditor({
 
   return (
     <div className="profile-edit">
-      <label className="status-label">
-        GitHub
-        <input
-          className="status-input"
-          value={githubUrl}
-          placeholder="https://github.com/you"
-          onChange={(e) => setGithubUrl(e.target.value)}
-          onBlur={() => {
-            if (githubUrl !== (self.githubUrl ?? "")) void save({ githubUrl });
-          }}
-        />
-      </label>
-      <label className="status-label">
-        Website
-        <input
-          className="status-input"
-          value={website}
-          placeholder="https://"
-          onChange={(e) => setWebsite(e.target.value)}
-          onBlur={() => {
-            if (website !== (self.website ?? "")) void save({ website });
-          }}
-        />
-      </label>
+      {PROFILE_URL_FIELDS.map((field) => (
+        <label key={field.key} className="status-label">
+          {field.label}
+          <input
+            className="status-input"
+            value={urls[field.key]}
+            placeholder={field.placeholder}
+            onChange={(e) => setUrls((current) => ({ ...current, [field.key]: e.target.value }))}
+            onBlur={() => {
+              if (urls[field.key] !== (self[field.key] ?? "")) void save({ [field.key]: urls[field.key] });
+            }}
+          />
+        </label>
+      ))}
       <label className="status-label">
         Tools
         <input
@@ -792,28 +822,94 @@ function ProfileEditor({
           }}
         />
       </label>
+      <label className="status-label">
+        What are you currently building?
+        <input
+          className="status-input"
+          value={currentlyBuilding}
+          maxLength={STATUS_TEXT_MAX}
+          placeholder="a lesson, a CLI, pairing notes…"
+          onChange={(e) => setCurrentlyBuilding(e.target.value)}
+          onBlur={() => {
+            if (currentlyBuilding !== (self.currentlyBuilding ?? "")) void save({ currentlyBuilding });
+          }}
+        />
+      </label>
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={ownsBusiness}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setOwnsBusiness(next);
+            void save({ ownsBusiness: next });
+          }}
+        />
+        Do you own a business?
+      </label>
+      {ownsBusiness ? (
+        <label className="status-label">
+          Business (one line)
+          <input
+            className="status-input"
+            value={businessNote}
+            maxLength={STATUS_TEXT_MAX}
+            placeholder="a weekend study club, a tiny tool…"
+            onChange={(e) => setBusinessNote(e.target.value)}
+            onBlur={() => {
+              if (businessNote !== (self.businessNote ?? "")) void save({ businessNote });
+            }}
+          />
+        </label>
+      ) : null}
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={wantsToHelp}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setWantsToHelp(next);
+            void save({ wantsToHelpOthersBuild: next });
+          }}
+        />
+        Want to help others with building?
+      </label>
     </div>
   );
 }
 
 function ProfileBits({ user, links }: { user: PublicUser; links: boolean }) {
   const tools = user.tools ?? [];
-  if (!user.githubUrl && !user.website && tools.length === 0) return null;
+  const chips = PROFILE_URL_FIELDS.filter((field) => user[field.key]).map((field) => ({
+    key: field.key,
+    label: field.key === "website" ? "Site" : field.key === "twitterUrl" ? "Twitter/X" : field.label,
+    href: user[field.key],
+  }));
+  const signals = [
+    user.currentlyBuilding ? user.currentlyBuilding : "",
+    user.ownsBusiness ? (user.businessNote ? `Owns a business · ${user.businessNote}` : "Owns a business") : "",
+    user.wantsToHelpOthersBuild ? "Happy to help others build" : "",
+  ].filter(Boolean);
+  if (!chips.length && !signals.length && tools.length === 0) return null;
   return (
     <span className="profile-bits">
       {tools.length ? <span className="tools">{tools.join(" · ")}</span> : null}
-      {links && user.githubUrl ? (
-        <a href={user.githubUrl} target="_blank" rel="noreferrer">
-          GitHub
-        </a>
-      ) : user.githubUrl ? (
-        <span className="tools">GitHub</span>
-      ) : null}
-      {links && user.website ? (
-        <a href={user.website} target="_blank" rel="noreferrer">
-          Site
-        </a>
-      ) : null}
+      {signals.map((signal) => (
+        <span key={signal} className="tools">
+          {signal}
+        </span>
+      ))}
+      {chips.map((chip) =>
+        links ? (
+          <a key={chip.key} href={chip.href} target="_blank" rel="noreferrer">
+            {chip.label}
+          </a>
+        ) : (
+          <span key={chip.key} className="tools">
+            {chip.label}
+          </span>
+        ),
+      )}
     </span>
   );
 }
