@@ -299,8 +299,17 @@ h1 {
 .fineprint {
   margin: 0;
   margin-top: auto;
-  padding: var(--space-2) var(--pad-x) var(--space-3);
-  font-size: 11px;
+  padding: 0 0 var(--space-2);
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--soft);
+}
+
+.shell-foot {
+  flex: none;
+  margin-top: auto;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
 }
 
 .search {
@@ -1045,7 +1054,32 @@ a.google-signin:hover {
 }
 
 .profile-pane .theme-switcher {
-  padding: 0 0 var(--space-4);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  margin: calc(var(--space-5) * -1) calc(var(--space-4) * -1) var(--space-4);
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  background: var(--chat);
+  border-bottom: 1px solid var(--line);
+}
+
+.theme-switcher.compact {
+  gap: 6px;
+  padding: 8px var(--pad-x) 10px;
+}
+
+.theme-switcher.compact .theme-picks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.theme-switcher.compact .theme-picks button {
+  justify-content: center;
+  min-width: 0;
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 11px;
 }
 
 .theme-picks {
@@ -1197,9 +1231,10 @@ a.google-signin:hover {
     grid-row: 5;
   }
 
-  .fineprint {
+  .shell-foot {
     grid-column: 1;
     grid-row: 6;
+    margin-top: 0;
   }
 
   .dm {
@@ -1228,6 +1263,10 @@ a.google-signin:hover {
 }
 
 @media (max-width: 719px) {
+  .shell:not(.login) .list {
+    min-height: 0;
+  }
+
   .shell.view-profile .list {
     display: none;
   }
@@ -1265,6 +1304,10 @@ a.google-signin:hover {
 
   .theme-picks button {
     justify-content: center;
+  }
+
+  .theme-switcher.compact .theme-picks button {
+    min-height: 44px;
   }
 
   .search input,
@@ -1313,7 +1356,7 @@ a.google-signin:hover {
     min-height: 140px;
   }
 
-  .dm {
+  .dm:not(.profile-pane) {
     min-height: 132px;
     max-height: 32%;
   }

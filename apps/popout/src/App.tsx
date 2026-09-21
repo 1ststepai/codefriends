@@ -635,7 +635,9 @@ export function App() {
           </button>
         </p>
       ) : null}
-      <footer className="fineprint">Not affiliated with Cursor, Anthropic, OpenAI, or Google.</footer>
+      <footer className="shell-foot">
+        <ThemeSwitcher compact value={theme} onChange={setTheme} />
+      </footer>
     </div>
   );
 }
@@ -849,17 +851,23 @@ function Login({
           </button>
         </p>
       ) : null}
-      <footer className="fineprint">
-        Not affiliated with Cursor, Anthropic, OpenAI, or Google.
-      </footer>
+      <footer className="fineprint">Not affiliated with Cursor, Anthropic, OpenAI, or Google.</footer>
     </div>
   );
 }
 
-function ThemeSwitcher({ value, onChange }: { value: ThemeId; onChange: (id: ThemeId) => void }) {
+function ThemeSwitcher({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: ThemeId;
+  onChange: (id: ThemeId) => void;
+  compact?: boolean;
+}) {
   const labelId = useId();
   return (
-    <div className="theme-switcher">
+    <div className={compact ? "theme-switcher compact" : "theme-switcher"}>
       <span className="identity-label" id={labelId}>
         Appearance
       </span>
