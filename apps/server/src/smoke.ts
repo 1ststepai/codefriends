@@ -341,7 +341,17 @@ async function inviteAndStatus(dbPath: string) {
     });
     assert.equal(presence.type, "presence");
 
-    const profile = await json<{ user: { githubUrl: string; website: string; tools: string[] } }>(
+    const profile = await json<{
+      user: {
+        githubUrl: string;
+        website: string;
+        tools: string[];
+        twitterUrl: string;
+        facebookUrl: string;
+        telegramUrl: string;
+        whatsappUrl: string;
+      };
+    }>(
       await fetch(`${server.url}/api/me/profile`, {
         method: "POST",
         headers: {
@@ -352,19 +362,68 @@ async function inviteAndStatus(dbPath: string) {
           githubUrl: "https://github.com/kit-codes",
           website: "https://kit.example",
           tools: "Cursor, Rust",
+          twitterUrl: "@kitcodes",
+          facebookUrl: "https://facebook.com/kit.codes",
+          telegramUrl: "kitcodes",
+          whatsappUrl: "+1 555 123 4567",
         }),
       }),
       "update profile",
     );
     assert.match(profile.user.githubUrl, /github\.com\/kit-codes/);
     assert.deepEqual(profile.user.tools, ["Cursor", "Rust"]);
+    assert.equal(profile.user.twitterUrl, "https://x.com/kitcodes");
+    assert.match(profile.user.facebookUrl, /facebook\.com\/kit\.codes/);
+    assert.equal(profile.user.telegramUrl, "https://t.me/kitcodes");
+    assert.equal(profile.user.whatsappUrl, "https://wa.me/15551234567");
+
+    const fetched = await json<{
+      user: {
+        twitterUrl: string;
+        facebookUrl: string;
+        telegramUrl: string;
+        whatsappUrl: string;
+      };
+    }>(
+      await fetch(`${server.url}/api/me`, {
+        headers: { authorization: `Bearer ${kit.token}` },
+      }),
+      "fetch profile",
+    );
+    assert.equal(fetched.user.twitterUrl, "https://x.com/kitcodes");
+    assert.equal(fetched.user.telegramUrl, "https://t.me/kitcodes");
+    assert.equal(fetched.user.whatsappUrl, "https://wa.me/15551234567");
+
+    const cleared = await json<{ user: { telegramUrl: string; twitterUrl: string } }>(
+      await fetch(`${server.url}/api/me/profile`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${kit.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ telegramUrl: "" }),
+      }),
+      "clear telegram",
+    );
+    assert.equal(cleared.user.telegramUrl, "");
+    assert.equal(cleared.user.twitterUrl, "https://x.com/kitcodes");
+
+    const afterClear = await json<{ user: { telegramUrl: string; twitterUrl: string } }>(
+      await fetch(`${server.url}/api/me`, {
+        headers: { authorization: `Bearer ${kit.token}` },
+      }),
+      "fetch after clear",
+    );
+    assert.equal(afterClear.user.telegramUrl, "");
+    assert.equal(afterClear.user.twitterUrl, "https://x.com/kitcodes");
 
     const profilePush = await waitForMatch(b, (msg) => {
       return (
         msg.type === "presence" &&
         msg.user.username === "kit" &&
         Boolean(msg.user.githubUrl?.includes("kit-codes")) &&
-        (msg.user.tools ?? []).includes("Rust")
+        (msg.user.tools ?? []).includes("Rust") &&
+        msg.user.twitterUrl === "https://x.com/kitcodes"
       );
     });
     assert.equal(profilePush.type, "presence");
@@ -378,6 +437,16 @@ async function inviteAndStatus(dbPath: string) {
       body: JSON.stringify({ githubUrl: "https://gitlab.com/kit" }),
     });
     assert.equal(badGithub.status, 400, "githubUrl must be github.com");
+
+    const badScheme = await fetch(`${server.url}/api/me/profile`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${kit.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ twitterUrl: "javascript:alert(1)" }),
+    });
+    assert.equal(badScheme.status, 400, "javascript: socials must be rejected");
 
     await server.store.db.prepare("UPDATE invites SET expires_at = 1").run();
     const stale = await fetch(`${server.url}/api/invites/${created.token}`);
@@ -528,7 +597,7 @@ async function main() {
   await schoolBoard(join(dir, "board.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, school board topic+reply, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, popout static served",
   );
 }
 

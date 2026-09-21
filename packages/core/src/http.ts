@@ -235,9 +235,14 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
     if (!user) return json({ error: "Sign in first" }, 401);
     try {
       const body = await readJson(request);
+      const optional = (value: unknown) => (value !== undefined ? String(value) : undefined);
       const updated = await store.updateProfile(user.id, {
-        githubUrl: body.githubUrl !== undefined ? String(body.githubUrl) : undefined,
-        website: body.website !== undefined ? String(body.website) : undefined,
+        githubUrl: optional(body.githubUrl),
+        website: optional(body.website),
+        twitterUrl: optional(body.twitterUrl),
+        facebookUrl: optional(body.facebookUrl),
+        telegramUrl: optional(body.telegramUrl),
+        whatsappUrl: optional(body.whatsappUrl),
         tools: body.tools,
       });
       await broadcastPresence(store, updated.id);

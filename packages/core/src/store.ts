@@ -1,5 +1,6 @@
 import {
   cleanHttpUrl,
+  cleanSocialUrl,
   conversationKey,
   DM_TEXT_MAX,
   isValidUsername,
@@ -37,6 +38,10 @@ export interface UserRecord {
   githubUrl: string;
   website: string;
   tools: string;
+  twitterUrl: string;
+  facebookUrl: string;
+  telegramUrl: string;
+  whatsappUrl: string;
   createdAt: number;
 }
 
@@ -51,6 +56,10 @@ interface UserRow {
   github_url?: string;
   website?: string;
   tools?: string;
+  twitter_url?: string;
+  facebook_url?: string;
+  telegram_url?: string;
+  whatsapp_url?: string;
   created_at: number;
 }
 
@@ -87,6 +96,10 @@ export class Store {
       githubUrl: "",
       website: "",
       tools: "",
+      twitterUrl: "",
+      facebookUrl: "",
+      telegramUrl: "",
+      whatsappUrl: "",
       createdAt: Date.now(),
     };
     await this.db
@@ -286,16 +299,39 @@ export class Store {
 
   async updateProfile(
     userId: string,
-    patch: { githubUrl?: string; website?: string; tools?: unknown },
+    patch: {
+      githubUrl?: string;
+      website?: string;
+      tools?: unknown;
+      twitterUrl?: string;
+      facebookUrl?: string;
+      telegramUrl?: string;
+      whatsappUrl?: string;
+    },
   ): Promise<UserRecord> {
     const user = await this.getUser(userId);
     if (!user) throw new Error("Unknown user");
     if (patch.githubUrl !== undefined) user.githubUrl = cleanHttpUrl(patch.githubUrl, "github.com");
     if (patch.website !== undefined) user.website = cleanHttpUrl(patch.website);
+    if (patch.twitterUrl !== undefined) user.twitterUrl = cleanSocialUrl(patch.twitterUrl, "twitter");
+    if (patch.facebookUrl !== undefined) user.facebookUrl = cleanSocialUrl(patch.facebookUrl, "facebook");
+    if (patch.telegramUrl !== undefined) user.telegramUrl = cleanSocialUrl(patch.telegramUrl, "telegram");
+    if (patch.whatsappUrl !== undefined) user.whatsappUrl = cleanSocialUrl(patch.whatsappUrl, "whatsapp");
     if (patch.tools !== undefined) user.tools = parseTools(patch.tools).join(", ");
     await this.db
-      .prepare("UPDATE users SET github_url = ?, website = ?, tools = ? WHERE id = ?")
-      .run(user.githubUrl, user.website, user.tools, user.id);
+      .prepare(
+        `UPDATE users SET github_url = ?, website = ?, tools = ?, twitter_url = ?, facebook_url = ?, telegram_url = ?, whatsapp_url = ? WHERE id = ?`,
+      )
+      .run(
+        user.githubUrl,
+        user.website,
+        user.tools,
+        user.twitterUrl,
+        user.facebookUrl,
+        user.telegramUrl,
+        user.whatsappUrl,
+        user.id,
+      );
     return user;
   }
 
@@ -331,6 +367,10 @@ export class Store {
       githubUrl: user.githubUrl,
       website: user.website,
       tools: parseTools(user.tools),
+      twitterUrl: user.twitterUrl,
+      facebookUrl: user.facebookUrl,
+      telegramUrl: user.telegramUrl,
+      whatsappUrl: user.whatsappUrl,
       identities: opts?.identities ? await this.identitiesOf(user.id) : undefined,
     };
   }
@@ -723,6 +763,10 @@ function rowToUser(row: UserRow): UserRecord {
     githubUrl: row.github_url ?? "",
     website: row.website ?? "",
     tools: row.tools ?? "",
+    twitterUrl: row.twitter_url ?? "",
+    facebookUrl: row.facebook_url ?? "",
+    telegramUrl: row.telegram_url ?? "",
+    whatsappUrl: row.whatsapp_url ?? "",
     createdAt: row.created_at,
   };
 }

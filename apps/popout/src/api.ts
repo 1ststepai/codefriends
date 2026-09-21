@@ -90,7 +90,15 @@ export async function acceptInvite(sessionToken: string, raw: string) {
 
 export async function updateProfile(
   token: string,
-  patch: { githubUrl?: string; website?: string; tools?: string },
+  patch: {
+    githubUrl?: string;
+    website?: string;
+    tools?: string;
+    twitterUrl?: string;
+    facebookUrl?: string;
+    telegramUrl?: string;
+    whatsappUrl?: string;
+  },
 ) {
   const res = await fetch(apiUrl("/api/me/profile"), {
     method: "POST",

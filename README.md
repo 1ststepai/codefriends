@@ -2,7 +2,7 @@
 
 An **AI coding school with your friends in the room** — **Cursor / Claude / Codex / Gemini**.
 
-Presence, 1:1 DMs, invite links, a short profile (GitHub / tools), and a **school board** (tiny forum) live in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM. Prompt/knowledge base and learning paths are next — this is not a Discord-for-devs headline.
+Presence, 1:1 DMs, invite links, a short profile (GitHub / tools / optional socials), and a **school board** (tiny forum) live in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM. Prompt/knowledge base and learning paths are next — this is not a Discord-for-devs headline.
 
 > **Not affiliated with Cursor, Anthropic, OpenAI, or Google.** This is an independent community project.
 
@@ -46,13 +46,13 @@ User accounts, **linked provider identities**, friend edges, **invite tokens**, 
 | **Cloudflare D1** | **$0 production** (`apps/worker`) | `wrangler.toml` `[[d1_databases]]` |
 | Turso / libSQL | Optional Node host with ephemeral disks | `CODEFRIENDS_LIBSQL_URL` + `CODEFRIENDS_LIBSQL_AUTH_TOKEN` |
 
-Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_thread_cap`, `003_invites`, `004_profile`, and `005_school_board`). A process / Worker restart keeps users, identities, friends, invites, profiles, DMs, and school-board posts. Seed data (`maya` / `parker` / …) is **idempotent** — inserted only when missing, never wiped.
+Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_thread_cap`, `003_invites`, `004_profile`, `005_school_board`, and `006_socials`). A process / Worker restart keeps users, identities, friends, invites, profiles, DMs, and school-board posts. Seed data (`maya` / `parker` / …) is **idempotent** — inserted only when missing, never wiped.
 
 **Invite links:** a signed-in user creates a reusable token (hashed in SQLite, default **7 days**). Share the URL (`?invite=` or `/invite/<token>`) or paste the code. Accepting while signed in (dev username or any live provider) creates a **bidirectional friend edge immediately** — no email, no pending request. The same link can be used by several people until it expires. You cannot accept your own invite. Already-friends is a no-op.
 
 **Status / now working on:** free-text (80 chars) plus optional IDE/client label (`cursor` / `claude` / `codex` / `gemini` / `web`). Sent over the existing `presence` WebSocket message and shown under each friend in the popout.
 
-**Profile share:** optional `githubUrl` (must be `github.com`, pasted — no GitHub OAuth), optional `website`, and a short tools list (comma-separated, stored on `users`). You edit your own via `POST /api/me/profile`. Friends see it on the presence payload and in the popout (chips + links on the DM header).
+**Profile share:** optional `githubUrl` (must be `github.com`, pasted — no GitHub OAuth), optional `website`, optional socials (`twitterUrl` / `facebookUrl` / `telegramUrl` / `whatsappUrl`), and a short tools list (comma-separated, stored on `users`). Twitter/X, Telegram, and WhatsApp also accept a handle or phone and normalize to an https URL. You edit your own via `POST /api/me/profile`. Friends see set fields only — chips + links on the DM header, no empty placeholders.
 
 **School board (v0):** Reddit-style but tiny — a topic (`title` + `body` text) and replies, SQLite only. **Any authenticated user on this instance can read and post.** That is the secure default for a self-hosted school cohort sharing one server; there is no public anonymous board. Friends-only visibility is not in v0. No upvotes, images, or live sockets — the popout loads over HTTP. Body is stored as plain text (markdown is accepted and shown as-is).
 
@@ -210,7 +210,7 @@ npm run smoke
 npm run test:connect
 ```
 
-Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, school board topic+reply, popout static served`
+Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, popout static served`
 
 `test:connect` prints the documented prompt paths (first run, Not now cooldown, Don’t ask again, already connected, host popout URLs).
 
@@ -230,7 +230,7 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 | `POST` | `/api/auth/handoff/redeem` | `{ code }` → `{ token, user }` |
 | `POST` | `/api/auth/logout` | Revokes that bearer token |
 | `GET` | `/api/me` | User + friends + linked identities |
-| `POST` | `/api/me/profile` | Bearer + `{ githubUrl?, website?, tools? }` — own profile only |
+| `POST` | `/api/me/profile` | Bearer + `{ githubUrl?, website?, tools?, twitterUrl?, facebookUrl?, telegramUrl?, whatsappUrl? }` — own profile only |
 | `GET` / `POST` | `/api/friends` | List / add by username |
 | `POST` | `/api/invites` | Bearer → `{ token, url, path, expiresAt }` (reusable, 7 days) |
 | `GET` | `/api/invites/:token` | Public peek: inviter + expiry (no auth) |

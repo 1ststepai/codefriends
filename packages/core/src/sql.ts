@@ -161,4 +161,13 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS topic_replies_topic_created ON topic_replies(topic_id, created_at);
     `,
   },
+  {
+    name: "006_socials",
+    sql: `
+      ALTER TABLE users ADD COLUMN twitter_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN facebook_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN telegram_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN whatsapp_url TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
