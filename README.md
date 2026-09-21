@@ -51,9 +51,15 @@ User accounts, **linked provider identities**, friend edges, **invite tokens**, 
 | **Cloudflare D1** | **$0 production** (`apps/worker`) | `wrangler.toml` `[[d1_databases]]` |
 | Turso / libSQL | Optional Node host with ephemeral disks | `CODEFRIENDS_LIBSQL_URL` + `CODEFRIENDS_LIBSQL_AUTH_TOKEN` |
 
-Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_thread_cap`, `003_invites`, `004_profile`, `005_school_board`, `006_socials`, `007_builder_profile`, `008_library`, `009_launch_packs`, `010_help_packets`, and `011_drop_launch_packs`). A process / Worker restart keeps users, identities, friends, invites, profiles, DMs, school-board posts, library items, and help-packet drafts. Seed data (`maya` / `parker` / … plus the official 1stStep shelf) is **idempotent** — inserted only when missing, never wiped.
+Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_thread_cap`, `003_invites`, `004_profile`, `005_school_board`, `006_socials`, `007_builder_profile`, `008_library`, `009_launch_packs`, `010_help_packets`, `011_drop_launch_packs`, and `012_unified_identity`). A process / Worker restart keeps users, identities, friends, friend requests, invites, profiles, DMs, school-board posts, library items, and help-packet drafts. Seed data (`maya` / `parker` / … plus the official 1stStep shelf) is **idempotent** — inserted only when missing, never wiped.
 
-**Invite links:** a signed-in user creates a reusable token (hashed in SQLite, default **7 days**). Share the URL (`?invite=` or `/invite/<token>`) or paste the code. Accepting while signed in (dev username or any live provider) creates a **bidirectional friend edge immediately** — no email, no pending request. The same link can be used by several people until it expires. You cannot accept your own invite. Already-friends is a no-op.
+**Anchor identity:** email or phone is the CodeFriends account anchor (`users.anchor_email` / `users.anchor_phone`). Sign in or attach via a hashed OTP (`POST /api/auth/anchor/*` or `/api/me/anchor/*`). No SMS/email provider is wired — local/dev returns `mockCode` when OTP mock is on. Details: [docs/identity-friends.md](./docs/identity-friends.md).
+
+**Verified tool links:** Cursor / Claude / Codex are **not** OAuth logins. A signed-in user starts a one-time link code (`POST /api/identities/link/start`); the local plugin or connect-client redeems it with a subject (`/complete`). “Verified” means that handoff, not vendor SSO. Gemini OIDC login is unchanged. Detach with `DELETE /api/identities/:provider`.
+
+**Friends graph:** username adds are **friend requests** (accept / decline / cancel). Presence and 1:1 DMs stay on the unified `users.id`, so Cursor + Claude links are one friend. DM history cap remains **200**.
+
+**Invite links:** a signed-in user creates a reusable token (hashed in SQLite, default **7 days**). Share the URL (`?invite=` or `/invite/<token>`) or paste the code. Accepting while signed in (dev username, anchor OTP, or any live provider) still creates a **bidirectional friend edge immediately** — a trusted shortcut that does not go through the request queue. The same link can be used by several people until it expires. You cannot accept your own invite. Already-friends is a no-op.
 
 **Status / now working on:** free-text (80 chars) plus optional IDE/client label (`cursor` / `claude` / `codex` / `gemini` / `web`). Sent over the existing `presence` WebSocket message and shown under each friend in the popout.
 
@@ -159,7 +165,7 @@ Deep link stub: `codefriends://open?dm=…` / `?handoff=…` (Linux `tauri dev` 
 
 Open the popout in two browser profiles (or a window + a private window), or the desktop app plus a private browser window. Sign in as `maya` in one and `parker` in the other. Click a friend to DM. Presence and messages are live. Restart the server: the same users and DMs are still there.
 
-To add someone who is not already on the seed roster: **Create invite link** in the popout, copy it, and open it while signed in as the other person (or paste the code). Accepting makes you friends immediately. Set **Now working on** — friends see that status text under your name.
+To add someone who is not already on the seed roster: **Create invite link** in the popout, copy it, and open it while signed in as the other person (or paste the code). Accepting an invite makes you friends immediately. Adding by username sends a friend request they can accept or decline. Set **Now working on** — friends see that status text under your name.
 
 To fill **Agents online** the way the concept mockup does (without a second human), keep the seed agent sockets alive:
 
@@ -241,7 +247,7 @@ npm run smoke
 npm run test:connect
 ```
 
-Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served`
+Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, unified identity + friend requests, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served`
 
 `test:connect` prints the documented prompt paths (first run, Not now cooldown, Don’t ask again, already connected, host popout URLs).
 
@@ -260,13 +266,24 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 | `POST` | `/api/auth/handoff` | Bearer → one-time popout code |
 | `POST` | `/api/auth/handoff/redeem` | `{ code }` → `{ token, user }` |
 | `POST` | `/api/auth/logout` | Revokes that bearer token |
-| `GET` | `/api/me` | User + friends + linked identities |
+| `POST` | `/api/auth/anchor/start` | `{ email }` or `{ phone }` → OTP challenge (`mockCode` when OTP mock is on) |
+| `POST` | `/api/auth/anchor/verify` | `{ challengeId, code }` → session (creates user if new) |
+| `POST` | `/api/me/anchor/start` | Bearer + email or phone — attach anchor to current user |
+| `POST` | `/api/me/anchor/verify` | Bearer + `{ challengeId, code }` |
+| `POST` | `/api/identities/link/start` | Bearer + `{ provider }` → one-time link code (not OAuth) |
+| `POST` | `/api/identities/link/complete` | `{ code, provider, subject }` attaches a verified link |
+| `DELETE` | `/api/identities/:provider` | Bearer — detach that tool identity |
+| `GET` | `/api/me` | User + friends + linked identities + anchors + pending requests |
 | `POST` | `/api/me/profile` | Bearer + `{ githubUrl?, website?, tools?, twitterUrl?, facebookUrl?, telegramUrl?, whatsappUrl?, currentlyBuilding?, ownsBusiness?, businessNote?, wantsToHelpOthersBuild? }` — own profile only |
-| `GET` / `POST` | `/api/friends` | List / add by username |
+| `GET` / `POST` | `/api/friends` | List / **request** by username (pending until accept) |
+| `GET` | `/api/friends/requests` | Incoming + outgoing pending requests |
+| `POST` | `/api/friends/requests/:id/accept` | Recipient accepts → bidirectional friends |
+| `POST` | `/api/friends/requests/:id/decline` | Recipient declines |
+| `POST` | `/api/friends/requests/:id/cancel` | Sender cancels |
 | `POST` | `/api/invites` | Bearer → `{ token, url, path, expiresAt }` (reusable, 7 days) |
 | `GET` | `/api/invites/:token` | Public peek: inviter + expiry (no auth) |
-| `POST` | `/api/invites/accept` | Bearer + `{ token }` (raw code or pasted URL) → friend edge |
-| `GET` | `/api/messages?with=` | History |
+| `POST` | `/api/invites/accept` | Bearer + `{ token }` → **instant** friend edge (skips request queue) |
+| `GET` | `/api/messages?with=` | History (last 200 per thread) |
 | `GET` | `/api/topics` | Bearer — recent school-board topics (instance-wide for signed-in users) |
 | `POST` | `/api/topics` | Bearer + `{ title, body }` |
 | `GET` | `/api/topics/:id` | Bearer — topic + replies |
@@ -278,7 +295,8 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 | `POST` | `/api/help-packets` | Bearer + `{ title, goal, repoUrl?, branch?, paths?, constraints?, blocked?, successCriteria?, sendBack?, libraryItemUrl? }` — generates markdown, saves a draft |
 | `GET` | `/api/help-packets/:id` | Bearer — own draft only |
 | `GET` | `/api/presence` | Public online count (status bar) |
-| `WS` | `/ws?token=` | `hello`, `presence` (includes `statusText` + `client`), `add_friend`, `dm`, `typing` |
+| `GET` | `/api/presence/resolve` | `?provider=&subject=` → unified public user (cross-tool presence) |
+| `WS` | `/ws?token=` | `hello`, `presence` (includes `statusText` + `client`), `add_friend` (request), `dm`, `typing` |
 
 ## $0 deploy (not already live)
 

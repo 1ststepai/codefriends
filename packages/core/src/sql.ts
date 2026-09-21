@@ -235,4 +235,50 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       DROP TABLE IF EXISTS launch_packs;
     `,
   },
+  {
+    name: "012_unified_identity",
+    sql: `
+      ALTER TABLE users ADD COLUMN anchor_email TEXT;
+      ALTER TABLE users ADD COLUMN anchor_phone TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS users_anchor_email ON users(anchor_email);
+      CREATE UNIQUE INDEX IF NOT EXISTS users_anchor_phone ON users(anchor_phone);
+
+      ALTER TABLE identities ADD COLUMN verified_at INTEGER;
+      ALTER TABLE identities ADD COLUMN verification_method TEXT;
+
+      CREATE TABLE IF NOT EXISTS otp_challenges (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        destination TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        purpose TEXT NOT NULL,
+        user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS otp_challenges_expires ON otp_challenges(expires_at);
+
+      CREATE TABLE IF NOT EXISTS identity_link_codes (
+        code_hash TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS identity_link_codes_user ON identity_link_codes(user_id);
+
+      CREATE TABLE IF NOT EXISTS friend_requests (
+        id TEXT PRIMARY KEY,
+        from_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        responded_at INTEGER,
+        UNIQUE (from_id, to_id)
+      );
+      CREATE INDEX IF NOT EXISTS friend_requests_to_status ON friend_requests(to_id, status);
+      CREATE INDEX IF NOT EXISTS friend_requests_from_status ON friend_requests(from_id, status);
+    `,
+  },
 ];

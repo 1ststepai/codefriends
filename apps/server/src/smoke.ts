@@ -222,15 +222,25 @@ async function historyCap(dbPath: string) {
   try {
     const maya = await login(server.url, "maya");
     const parker = await login(server.url, "parker");
-    const added = await fetch(`${server.url}/api/friends`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${maya.token}`,
-      },
-      body: JSON.stringify({ username: "parker" }),
-    });
-    await json(added, "add friend");
+    const requested = await json<{ request: { id: string; status: string } }>(
+      await fetch(`${server.url}/api/friends`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${maya.token}`,
+        },
+        body: JSON.stringify({ username: "parker" }),
+      }),
+      "friend request",
+    );
+    assert.equal(requested.request.status, "pending");
+    await json(
+      await fetch(`${server.url}/api/friends/requests/${requested.request.id}/accept`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${parker.token}` },
+      }),
+      "accept friend request",
+    );
 
     const a = connect(server.url, maya.token);
     await a.ready;
@@ -861,17 +871,263 @@ async function servePopout(dbPath: string) {
   }
 }
 
+async function unifiedIdentity(dbPath: string) {
+  const server = await startServer({
+    port: 0,
+    seed: false,
+    dbPath,
+    config: { dbPath, devLogin: true, otpMock: true, dmHistoryLimit: 200 },
+  });
+  try {
+    const started = await json<{ challengeId: string; mockCode?: string }>(
+      await fetch(`${server.url}/api/auth/anchor/start`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "Maya@Example.test" }),
+      }),
+      "anchor start",
+    );
+    assert.ok(started.mockCode, "dev/test OTP mock must return the code");
+
+    const session = await json<{
+      token: string;
+      created: boolean;
+      user: { id: string; username: string };
+    }>(
+      await fetch(`${server.url}/api/auth/anchor/verify`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ challengeId: started.challengeId, code: started.mockCode }),
+      }),
+      "anchor verify",
+    );
+    assert.equal(session.created, true);
+
+    const again = await json<{ challengeId: string; mockCode?: string }>(
+      await fetch(`${server.url}/api/auth/anchor/start`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "maya@example.test" }),
+      }),
+      "anchor re-login start",
+    );
+    const relog = await json<{ user: { id: string }; created: boolean }>(
+      await fetch(`${server.url}/api/auth/anchor/verify`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ challengeId: again.challengeId, code: again.mockCode }),
+      }),
+      "anchor re-login",
+    );
+    assert.equal(relog.created, false);
+    assert.equal(relog.user.id, session.user.id, "email anchor must resolve to one user");
+
+    const phoneStart = await json<{ challengeId: string; mockCode?: string }>(
+      await fetch(`${server.url}/api/me/anchor/start`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ phone: "+1 (555) 010-2048" }),
+      }),
+      "phone anchor start",
+    );
+    const phoneOk = await json<{ anchors: { email?: string; phone?: string } }>(
+      await fetch(`${server.url}/api/me/anchor/verify`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ challengeId: phoneStart.challengeId, code: phoneStart.mockCode }),
+      }),
+      "phone anchor verify",
+    );
+    assert.equal(phoneOk.anchors.email, "maya@example.test");
+    assert.equal(phoneOk.anchors.phone, "+15550102048");
+
+    const link = await json<{ code: string }>(
+      await fetch(`${server.url}/api/identities/link/start`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ provider: "cursor" }),
+      }),
+      "link start",
+    );
+    const attached = await json<{
+      user: { id: string };
+      identities: Array<{ provider: string; verificationMethod?: string }>;
+    }>(
+      await fetch(`${server.url}/api/identities/link/complete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: link.code,
+          provider: "cursor",
+          subject: "cursor-local-maya",
+          client: "cursor",
+        }),
+      }),
+      "link complete",
+    );
+    assert.equal(attached.user.id, session.user.id);
+    assert.ok(
+      attached.identities.some((i) => i.provider === "cursor" && i.verificationMethod === "link_code"),
+    );
+
+    const reused = await fetch(`${server.url}/api/identities/link/complete`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: link.code, provider: "cursor", subject: "other" }),
+    });
+    assert.equal(reused.status, 400, "link code is single use");
+
+    const claudeLink = await json<{ code: string }>(
+      await fetch(`${server.url}/api/identities/link/start`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ provider: "claude" }),
+      }),
+      "claude link start",
+    );
+    await json(
+      await fetch(`${server.url}/api/identities/link/complete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          code: claudeLink.code,
+          provider: "claude",
+          subject: "claude-local-maya",
+          client: "claude",
+        }),
+      }),
+      "claude link complete",
+    );
+
+    const detached = await json<{ identities: Array<{ provider: string }> }>(
+      await fetch(`${server.url}/api/identities/claude`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${session.token}` },
+      }),
+      "detach claude",
+    );
+    assert.equal(detached.identities.some((i) => i.provider === "claude"), false);
+    assert.ok(detached.identities.some((i) => i.provider === "cursor"));
+
+    const other = await login(server.url, "rio");
+    const pending = await json<{ request: { id: string; status: string; toId: string } }>(
+      await fetch(`${server.url}/api/friends`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ username: "rio" }),
+      }),
+      "friend request",
+    );
+    assert.equal(pending.request.status, "pending");
+    assert.equal(pending.request.toId, other.user.id);
+
+    const declined = await login(server.url, "nope");
+    const declineReq = await json<{ request: { id: string } }>(
+      await fetch(`${server.url}/api/friends`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${session.token}`,
+        },
+        body: JSON.stringify({ username: "nope" }),
+      }),
+      "request to decline",
+    );
+    await json(
+      await fetch(`${server.url}/api/friends/requests/${declineReq.request.id}/decline`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${declined.token}` },
+      }),
+      "decline",
+    );
+    const dmBlocked = await fetch(`${server.url}/api/messages?with=${declined.user.id}`, {
+      headers: { authorization: `Bearer ${session.token}` },
+    });
+    assert.equal(dmBlocked.ok, true);
+    const empty = (await dmBlocked.json()) as { messages: unknown[] };
+    assert.equal(empty.messages.length, 0);
+
+    const accepted = await json<{ friend: { id: string; username: string } }>(
+      await fetch(`${server.url}/api/friends/requests/${pending.request.id}/accept`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${other.token}` },
+      }),
+      "accept request",
+    );
+    assert.equal(accepted.friend.id, session.user.id);
+
+    const socket = connect(server.url, session.token);
+    await socket.ready;
+    await socket.waitFor("hello_ok");
+    socket.ws.send(JSON.stringify({ type: "presence", client: "cursor", status: "available", statusText: "in cursor" }));
+    await socket.waitFor("presence");
+
+    const asCursor = await json<{ user: { id: string; online: boolean; client: string } }>(
+      await fetch(
+        `${server.url}/api/presence/resolve?provider=cursor&subject=${encodeURIComponent("cursor-local-maya")}`,
+      ),
+      "resolve cursor presence",
+    );
+    assert.equal(asCursor.user.id, session.user.id);
+    assert.equal(asCursor.user.online, true);
+    assert.equal(asCursor.user.client, "cursor");
+
+    const missing = await fetch(
+      `${server.url}/api/presence/resolve?provider=claude&subject=${encodeURIComponent("claude-local-maya")}`,
+    );
+    assert.equal(missing.status, 404, "detached identity must not resolve");
+
+    socket.ws.send(
+      JSON.stringify({ type: "dm", to: other.user.id, text: "same person in cursor" }),
+    );
+    const delivered = await socket.waitFor("dm");
+    assert.equal(delivered.type, "dm");
+    if (delivered.type === "dm") {
+      assert.equal(delivered.message.from, session.user.id);
+      assert.equal(delivered.message.to, other.user.id);
+    }
+
+    const history = await json<{ messages: Array<{ from: string; to: string; text: string }> }>(
+      await fetch(`${server.url}/api/messages?with=${session.user.id}`, {
+        headers: { authorization: `Bearer ${other.token}` },
+      }),
+      "dm on unified id",
+    );
+    assert.equal(history.messages.length, 1);
+    assert.equal(history.messages[0].from, session.user.id);
+    socket.ws.close();
+  } finally {
+    await server.close();
+  }
+}
+
 async function main() {
   const dir = mkdtempSync(join(tmpdir(), "codefriends-smoke-"));
   await persistAcrossRestart(join(dir, "persist.sqlite"));
   await historyCap(join(dir, "cap.sqlite"));
   await inviteAndStatus(join(dir, "invite.sqlite"));
+  await unifiedIdentity(join(dir, "identity.sqlite"));
   await schoolBoard(join(dir, "board.sqlite"));
   await buildLibrary(join(dir, "library.sqlite"));
   await helpPackets(join(dir, "help-packets.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, unified identity + friend requests, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served",
   );
 }
 

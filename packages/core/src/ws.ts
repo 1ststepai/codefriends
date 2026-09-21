@@ -56,13 +56,15 @@ export async function handleClientMessage(
       return updated;
     }
     case "add_friend": {
-      await store.addFriend(user.id, msg.username);
-      await pushFriends(store, user.id);
-      const target = await store.userByName(msg.username);
-      if (target) {
-        await pushFriends(store, target.id);
-        await broadcastPresence(store, user.id);
-        await broadcastPresence(store, target.id);
+      const requestRow = await store.requestFriend(user.id, msg.username);
+      if (requestRow.status === "accepted") {
+        await pushFriends(store, user.id);
+        const target = await store.userByName(msg.username);
+        if (target) {
+          await pushFriends(store, target.id);
+          await broadcastPresence(store, user.id);
+          await broadcastPresence(store, target.id);
+        }
       }
       return user;
     }

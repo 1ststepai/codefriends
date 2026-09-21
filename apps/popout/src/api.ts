@@ -74,6 +74,25 @@ export async function createInvite(token: string) {
   return { token: data.token, url: data.url, path: data.path ?? `/invite/${data.token}`, expiresAt: data.expiresAt ?? 0 };
 }
 
+export async function requestFriend(token: string, username: string) {
+  const res = await fetch(apiUrl("/api/friends"), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ username }),
+  });
+  const data = (await res.json()) as {
+    request?: { status: string };
+    friend?: PublicUser;
+    friends?: PublicUser[];
+    error?: string;
+  };
+  if (!res.ok || !data.request) throw new Error(data.error ?? "Could not send friend request");
+  return data;
+}
+
 export async function acceptInvite(sessionToken: string, raw: string) {
   const res = await fetch(apiUrl("/api/invites/accept"), {
     method: "POST",

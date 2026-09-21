@@ -12,6 +12,7 @@ export interface WorkerEnv {
   CODEFRIENDS_POPOUT_URL?: string;
   CODEFRIENDS_DEV_LOGIN?: string;
   CODEFRIENDS_MOCK_PROVIDERS?: string;
+  CODEFRIENDS_OTP_MOCK?: string;
   CODEFRIENDS_SEED?: string;
   CODEFRIENDS_DM_HISTORY_LIMIT?: string;
   CODEFRIENDS_CORS_ORIGINS?: string;
@@ -30,6 +31,7 @@ export function configFromEnv(env: WorkerEnv, requestUrl?: string): RuntimeConfi
     popoutUrl,
     devLogin: devFlag === "1",
     mockProviders: env.CODEFRIENDS_MOCK_PROVIDERS === "1",
+    otpMock: env.CODEFRIENDS_OTP_MOCK === "1",
     dmHistoryLimit: parseHistoryLimit(env.CODEFRIENDS_DM_HISTORY_LIMIT),
     storeKind: "d1",
     corsOrigins: parseCorsOrigins(env.CODEFRIENDS_CORS_ORIGINS),

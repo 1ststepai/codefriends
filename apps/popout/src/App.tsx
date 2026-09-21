@@ -48,6 +48,7 @@ import {
   mockProviderLogin,
   peekInvite,
   redeemHandoff,
+  requestFriend,
   updateProfile,
   wsUrl,
 } from "./api";
@@ -426,11 +427,25 @@ export function App() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={
-            view === "board" ? "Search the school board" : view === "library" ? "Search the library" : "Search friends"
+            view === "board"
+              ? "Search the school board"
+              : view === "library"
+                ? "Search the library"
+                : "Search or request a friend"
           }
           onKeyDown={(e) => {
             if (view === "friends" && e.key === "Enter" && query.trim()) {
-              send({ type: "add_friend", username: query.trim() });
+              void requestFriend(token, query.trim())
+                .then((result) => {
+                  if (result.request?.status === "accepted" && result.friends) setFriends(result.friends);
+                  setError(
+                    result.request?.status === "pending"
+                      ? `Friend request sent to @${query.trim()}`
+                      : "",
+                  );
+                  if (result.request?.status === "accepted") setQuery("");
+                })
+                .catch((err) => setError(err instanceof Error ? err.message : "Could not send friend request"));
             }
           }}
         />
