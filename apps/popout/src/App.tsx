@@ -4,16 +4,20 @@ import type {
   ClientKind,
   ForumReply,
   ForumTopic,
-  LaunchPack,
+  HelpPacket,
   LibraryItem,
   PresenceStatus,
   PublicUser,
   WsServerMessage,
 } from "@codefriends/shared";
 import {
-  canDraftLaunchPack,
   CLIENTS,
   CLIENT_LABEL,
+  formatHelpPacket,
+  HELP_PACKET_FIELD_MAX,
+  HELP_PACKET_LIBRARY_URL,
+  HELP_PACKET_TITLE_MAX,
+  helpPacketFilename,
   LIBRARY_DESCRIPTION_MAX,
   LIBRARY_KIND_LABEL,
   LIBRARY_KINDS,
@@ -30,13 +34,14 @@ import {
   addLibraryItem,
   addTopicReply,
   apiUrl,
+  createHelpPacket,
   createInvite,
-  createLaunchPack,
   createTopic,
   deleteLibraryItem,
   fetchProviders,
-  getLaunchPack,
+  getHelpPacket,
   getTopic,
+  listHelpPackets,
   listLibrary,
   listTopics,
   login,
@@ -82,6 +87,9 @@ export function App() {
   const [replies, setReplies] = useState<ForumReply[]>([]);
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [openLibraryId, setOpenLibraryId] = useState<string | null>(null);
+  const [helpPackets, setHelpPackets] = useState<HelpPacket[]>([]);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [openPacket, setOpenPacket] = useState<HelpPacket | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -263,6 +271,13 @@ export function App() {
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load the build library");
       });
+    listHelpPackets(token)
+      .then((packets) => {
+        if (!cancelled) setHelpPackets(packets);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load help packets");
+      });
     return () => {
       cancelled = true;
     };
@@ -316,6 +331,7 @@ export function App() {
   const filteredPeople = filterPeople(people, query);
   const filteredTopics = filterTopics(topics, query);
   const filteredLibrary = filterLibrary(libraryItems, query);
+  const filteredPackets = filterHelpPackets(helpPackets, query);
   const openLibrary = libraryItems.find((item) => item.id === openLibraryId) ?? null;
   const active = friends.find((f) => f.id === activeId) ?? null;
   const thread = useMemo(
@@ -473,9 +489,11 @@ export function App() {
       ) : (
         <LibraryList
           token={token}
-          selfId={self.id}
           items={filteredLibrary}
+          packets={filteredPackets}
           activeId={openLibraryId}
+          activePacketId={openPacket?.id ?? null}
+          helpOpen={helpOpen}
           onError={setError}
           onAdded={(item) => {
             setLibraryItems((cur) => {
@@ -485,8 +503,37 @@ export function App() {
               return [...official, ...community];
             });
             setOpenLibraryId(item.id);
+            setHelpOpen(false);
+            setOpenPacket(null);
           }}
-          onOpen={setOpenLibraryId}
+          onOpen={(id) => {
+            const item = libraryItems.find((row) => row.id === id);
+            setOpenLibraryId(id);
+            if (item?.url === HELP_PACKET_LIBRARY_URL) {
+              setHelpOpen(true);
+              setOpenPacket(null);
+            } else {
+              setHelpOpen(false);
+              setOpenPacket(null);
+            }
+          }}
+          onWritePacket={() => {
+            const shelf = libraryItems.find((row) => row.url === HELP_PACKET_LIBRARY_URL);
+            setOpenLibraryId(shelf?.id ?? null);
+            setHelpOpen(true);
+            setOpenPacket(null);
+          }}
+          onOpenPacket={async (id) => {
+            try {
+              const packet = await getHelpPacket(token, id);
+              setOpenPacket(packet);
+              setHelpOpen(true);
+              setOpenLibraryId(null);
+              setError("");
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Could not open that packet");
+            }
+          }}
         />
       )}
 
@@ -515,6 +562,21 @@ export function App() {
             setOpenTopic(topic);
             setReplies(nextReplies);
             setTopics((cur) => cur.map((t) => (t.id === topic.id ? topic : t)));
+          }}
+        />
+      ) : view === "library" && helpOpen ? (
+        <HelpPacketPanel
+          token={token}
+          packet={openPacket}
+          onError={setError}
+          onSaved={(packet) => {
+            setHelpPackets((cur) => [packet, ...cur.filter((row) => row.id !== packet.id)]);
+            setOpenPacket(packet);
+          }}
+          onWriteAnother={() => {
+            setOpenPacket(null);
+            const shelf = libraryItems.find((row) => row.url === HELP_PACKET_LIBRARY_URL);
+            setOpenLibraryId(shelf?.id ?? null);
           }}
         />
       ) : (
@@ -571,9 +633,10 @@ function Login({
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
         Learn with friends while you use Cursor, Claude, Codex, or Gemini. Presence, DMs, a short
-        profile (GitHub / tools / optional socials), a school board, and a build library of 1stStep
-        starters plus projects the cohort shares. One CodeFriends user can link several of those
-        identities so you stay a single person in the room.
+        profile (GitHub / tools / optional socials), a school board, a build library of 1stStep
+        starters plus projects the cohort shares, and a help packet you can copy to a friend's
+        AI chat. One CodeFriends user can link several of those identities so you stay a single
+        person in the room.
       </p>
       {inviteFrom ? (
         <p className="lede highlight">
@@ -1419,20 +1482,28 @@ function BoardPanel({
 
 function LibraryList({
   token,
-  selfId,
   items,
+  packets,
   activeId,
+  activePacketId,
+  helpOpen,
   onOpen,
   onAdded,
   onError,
+  onWritePacket,
+  onOpenPacket,
 }: Readonly<{
   token: string;
-  selfId: string;
   items: LibraryItem[];
+  packets: HelpPacket[];
   activeId: string | null;
+  activePacketId: string | null;
+  helpOpen: boolean;
   onOpen: (id: string) => void;
   onAdded: (item: LibraryItem) => void;
   onError: (msg: string) => void;
+  onWritePacket: () => void;
+  onOpenPacket: (id: string) => void;
 }>) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -1441,33 +1512,52 @@ function LibraryList({
   const [busy, setBusy] = useState(false);
   const official = items.filter((item) => item.source === "official");
   const community = items.filter((item) => item.source !== "official");
-  const starter = official[0];
+  const starter = official.find((item) => item.url !== HELP_PACKET_LIBRARY_URL) ?? official[0];
 
   return (
     <section className="list">
       <div className="library-hero">
         <p className="lede">
-          Start a build from the trusted <strong>1stStep</strong> shelf, then share a ChatGPT
-          project, repo, or demo so friends can learn with you.
+          Start a build from the trusted <strong>1stStep</strong> shelf, share a project, or write a
+          help packet so a friend can finish stuck work on their own AI usage.
         </p>
-        <button
-          className="primary"
-          type="button"
-          disabled={!starter}
-          onClick={() => starter && onOpen(starter.id)}
-        >
-          Start your build
-        </button>
+        <div className="library-hero-actions">
+          <button
+            className="primary"
+            type="button"
+            disabled={!starter}
+            onClick={() => starter && onOpen(starter.id)}
+          >
+            Start your build
+          </button>
+          <button className="ghost compact" type="button" onClick={onWritePacket}>
+            Write a help packet
+          </button>
+        </div>
       </div>
       <SectionTitle label="1stStep shelf" count={official.length} />
       {official.map((item) => (
         <LibraryCard
           key={item.id}
           item={item}
-          active={item.id === activeId}
-          canShip={canDraftLaunchPack(item, selfId)}
+          active={item.id === activeId && (item.url !== HELP_PACKET_LIBRARY_URL || (helpOpen && !activePacketId))}
           onOpen={() => onOpen(item.id)}
         />
+      ))}
+      <SectionTitle label="Your help packets" count={packets.length} />
+      {packets.map((packet) => (
+        <button
+          key={packet.id}
+          type="button"
+          className={`library-card ${packet.id === activePacketId ? "active" : ""}`}
+          onClick={() => onOpenPacket(packet.id)}
+        >
+          <span className="name-line">
+            <strong>{packet.title}</strong>
+            <span className="badge">Draft</span>
+          </span>
+          <span className="status">Copy or download — nothing is posted for you.</span>
+        </button>
       ))}
       <form
         className="board-compose"
@@ -1527,13 +1617,7 @@ function LibraryList({
       </form>
       <SectionTitle label="From the cohort" count={community.length} />
       {community.map((item) => (
-        <LibraryCard
-          key={item.id}
-          item={item}
-          active={item.id === activeId}
-          canShip={canDraftLaunchPack(item, selfId)}
-          onOpen={() => onOpen(item.id)}
-        />
+        <LibraryCard key={item.id} item={item} active={item.id === activeId} onOpen={() => onOpen(item.id)} />
       ))}
     </section>
   );
@@ -1542,30 +1626,25 @@ function LibraryList({
 function LibraryCard({
   item,
   active,
-  canShip,
   onOpen,
 }: {
   item: LibraryItem;
   active: boolean;
-  canShip: boolean;
   onOpen: () => void;
 }) {
   return (
-    <article className={`library-card ${item.source} ${active ? "active" : ""}`}>
-      <button type="button" className="library-card-main" onClick={onOpen}>
-        <span className="name-line">
-          <strong>{item.title}</strong>
-          {item.source === "official" ? <span className="badge official">1stStep</span> : null}
-          <span className="badge">{LIBRARY_KIND_LABEL[item.kind]}</span>
-        </span>
-        <span className="status">{item.description}</span>
-      </button>
-      {canShip ? (
-        <button type="button" className="ghost compact" onClick={onOpen}>
-          Help me ship this
-        </button>
-      ) : null}
-    </article>
+    <button
+      type="button"
+      className={`library-card ${item.source} ${active ? "active" : ""}`}
+      onClick={onOpen}
+    >
+      <span className="name-line">
+        <strong>{item.title}</strong>
+        {item.source === "official" ? <span className="badge official">1stStep</span> : null}
+        <span className="badge">{LIBRARY_KIND_LABEL[item.kind]}</span>
+      </span>
+      <span className="status">{item.description}</span>
+    </button>
   );
 }
 
@@ -1583,33 +1662,10 @@ function LibraryPanel({
   onError: (msg: string) => void;
 }>) {
   const [busy, setBusy] = useState(false);
-  const [packBusy, setPackBusy] = useState(false);
-  const [drafts, setDrafts] = useState<LaunchDrafts | null>(null);
-  const canShip = item ? canDraftLaunchPack(item, selfId) : false;
-
-  useEffect(() => {
-    if (!item || !canShip) {
-      setDrafts(null);
-      return;
-    }
-    setDrafts(null);
-    let cancelled = false;
-    getLaunchPack(token, item.id)
-      .then((pack) => {
-        if (!cancelled) setDrafts(pack ? launchDrafts(pack) : null);
-      })
-      .catch((err) => {
-        if (!cancelled) onError(err instanceof Error ? err.message : "Could not load launch pack");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, item?.id, canShip]);
-
   if (!item) {
     return (
       <section className="dm empty">
-        <p>Open a starter from the 1stStep shelf, or a project a friend shared. Learn together — then ship with friends.</p>
+        <p>Open a starter from the 1stStep shelf, write a help packet, or open a project a friend shared.</p>
       </section>
     );
   }
@@ -1632,24 +1688,6 @@ function LibraryPanel({
         <a className="primary library-open" href={item.url} target="_blank" rel="noreferrer">
           Open {item.source === "official" ? "starter" : "link"}
         </a>
-        {canShip ? (
-          <LaunchPackPanel
-            drafts={drafts}
-            busy={packBusy}
-            onChange={setDrafts}
-            onGenerate={async () => {
-              setPackBusy(true);
-              onError("");
-              try {
-                setDrafts(launchDrafts(await createLaunchPack(token, item.id)));
-              } catch (err) {
-                onError(err instanceof Error ? err.message : "Could not generate launch pack");
-              } finally {
-                setPackBusy(false);
-              }
-            }}
-          />
-        ) : null}
         {own ? (
           <button
             className="ghost compact"
@@ -1676,133 +1714,188 @@ function LibraryPanel({
   );
 }
 
-type LaunchDrafts = Pick<
-  LaunchPack,
-  "showHnTitle" | "showHnBody" | "redditTitle" | "redditBody" | "socialShort" | "socialLong" | "friendBlurb"
->;
+const EMPTY_PACKET_FIELDS = {
+  title: "",
+  goal: "",
+  repoUrl: "",
+  branch: "",
+  paths: "",
+  constraints: "",
+  blocked: "",
+  successCriteria: "",
+  sendBack: "",
+  libraryItemUrl: "",
+};
 
-function launchDrafts(pack: LaunchPack): LaunchDrafts {
-  return {
-    showHnTitle: pack.showHnTitle,
-    showHnBody: pack.showHnBody,
-    redditTitle: pack.redditTitle,
-    redditBody: pack.redditBody,
-    socialShort: pack.socialShort,
-    socialLong: pack.socialLong,
-    friendBlurb: pack.friendBlurb,
-  };
-}
-
-function LaunchPackPanel({
-  drafts,
-  busy,
-  onChange,
-  onGenerate,
-}: {
-  drafts: LaunchDrafts | null;
-  busy: boolean;
-  onChange: (next: LaunchDrafts) => void;
-  onGenerate: () => void;
-}) {
-  return (
-    <div className="launch-pack">
-      <p className="lede">
-        <strong>Launch pack</strong> — drafts only, you post when ready. Education-first copy to paste on Show HN,
-        Reddit, or a short social. CodeFriends does not post for you.
-      </p>
-      {!drafts ? (
-        <button className="ghost compact" type="button" disabled={busy} onClick={onGenerate}>
-          {busy ? "Drafting…" : "Generate launch pack"}
-        </button>
-      ) : (
-        <>
-          <CopyField
-            label="Show HN title"
-            value={drafts.showHnTitle}
-            rows={2}
-            onChange={(showHnTitle) => onChange({ ...drafts, showHnTitle })}
-          />
-          <CopyField
-            label="Show HN body"
-            value={drafts.showHnBody}
-            rows={6}
-            onChange={(showHnBody) => onChange({ ...drafts, showHnBody })}
-          />
-          <CopyField
-            label="Reddit title"
-            hint="Generic r/SideProject, r/ChatGPT, or r/LocalLLaMA style — match sub rules when you post"
-            value={drafts.redditTitle}
-            rows={2}
-            onChange={(redditTitle) => onChange({ ...drafts, redditTitle })}
-          />
-          <CopyField
-            label="Reddit body"
-            value={drafts.redditBody}
-            rows={6}
-            onChange={(redditBody) => onChange({ ...drafts, redditBody })}
-          />
-          <CopyField
-            label="Short social (X-length)"
-            value={drafts.socialShort}
-            rows={3}
-            onChange={(socialShort) => onChange({ ...drafts, socialShort })}
-          />
-          <CopyField
-            label="Longer post (LinkedIn / Facebook)"
-            value={drafts.socialLong}
-            rows={6}
-            onChange={(socialLong) => onChange({ ...drafts, socialLong })}
-          />
-          <CopyField
-            label="Friend-share blurb"
-            hint="Paste into a CodeFriends DM"
-            value={drafts.friendBlurb}
-            rows={3}
-            onChange={(friendBlurb) => onChange({ ...drafts, friendBlurb })}
-          />
-          <button className="ghost compact" type="button" disabled={busy} onClick={onGenerate}>
-            {busy ? "Drafting…" : "Regenerate drafts"}
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-function CopyField({
-  label,
-  hint,
-  value,
-  rows,
-  onChange,
-}: {
-  label: string;
-  hint?: string;
-  value: string;
-  rows: number;
-  onChange: (value: string) => void;
-}) {
+function HelpPacketPanel({
+  token,
+  packet,
+  onSaved,
+  onError,
+  onWriteAnother,
+}: Readonly<{
+  token: string;
+  packet: HelpPacket | null;
+  onSaved: (packet: HelpPacket) => void;
+  onError: (msg: string) => void;
+  onWriteAnother: () => void;
+}>) {
+  const [fields, setFields] = useState(EMPTY_PACKET_FIELDS);
+  const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+
   useEffect(() => {
+    setFields(EMPTY_PACKET_FIELDS);
     setCopied(false);
-  }, [value]);
+  }, [packet?.id]);
+
+  const markdown = packet?.markdown ?? formatHelpPacket(fields);
+  const title = packet?.title || fields.title;
+  const canSave = !packet && Boolean(fields.title.trim() && fields.goal.trim());
+
+  const setField = (key: keyof typeof EMPTY_PACKET_FIELDS, value: string) => {
+    setFields((cur) => ({ ...cur, [key]: value }));
+    setCopied(false);
+  };
+
+  const copyMarkdown = async () => {
+    try {
+      await navigator.clipboard.writeText(markdown);
+      setCopied(true);
+      onError("");
+    } catch {
+      onError("Could not copy — select the preview and copy it yourself");
+    }
+  };
+
+  const downloadMarkdown = () => {
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = helpPacketFilename(title);
+    a.click();
+    URL.revokeObjectURL(href);
+  };
+
   return (
-    <div className="launch-field">
-      <span className="launch-field-top">
-        <span>{label}</span>
-        <button
-          className="ghost compact"
-          type="button"
-          onClick={async () => {
-            setCopied(await copyText(value));
-          }}
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </span>
-      {hint ? <span className="launch-hint">{hint}</span> : null}
-      <textarea value={value} rows={rows} onChange={(e) => onChange(e.target.value)} />
-    </div>
+    <section className="dm">
+      <header>
+        <span>Help packet</span>
+        <span className="status">You write it to share. They run agents on their account.</span>
+      </header>
+      <div className="thread">
+        <p className="lede packet-consent">
+          Create this packet only if you want a friend to help. They accept voluntarily and finish
+          the work on <strong>their</strong> Cursor / Claude / Codex / Gemini usage — we never claim
+          to stretch vendor quotas. Only the notes you type are included (no chat-history scrape).
+          Copy or download the markdown; nothing is posted to socials.
+        </p>
+        {packet ? (
+          <div className="packet-actions">
+            <button className="ghost compact" type="button" onClick={onWriteAnother}>
+              Write another
+            </button>
+          </div>
+        ) : (
+          <form
+            className="packet-form"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (!canSave) return;
+              setBusy(true);
+              onError("");
+              try {
+                onSaved(await createHelpPacket(token, fields));
+              } catch (err) {
+                onError(err instanceof Error ? err.message : "Could not save help packet");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <input
+              value={fields.title}
+              maxLength={HELP_PACKET_TITLE_MAX}
+              placeholder="Title"
+              onChange={(e) => setField("title", e.target.value)}
+            />
+            <textarea
+              value={fields.goal}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="1. Goal — what done looks like"
+              rows={3}
+              onChange={(e) => setField("goal", e.target.value)}
+            />
+            <input
+              value={fields.repoUrl}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="2. Repo URL"
+              onChange={(e) => setField("repoUrl", e.target.value)}
+            />
+            <input
+              value={fields.branch}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="Branch"
+              onChange={(e) => setField("branch", e.target.value)}
+            />
+            <input
+              value={fields.paths}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="Relevant paths"
+              onChange={(e) => setField("paths", e.target.value)}
+            />
+            <textarea
+              value={fields.constraints}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="3. Constraints — don't touch X, stack notes"
+              rows={2}
+              onChange={(e) => setField("constraints", e.target.value)}
+            />
+            <textarea
+              value={fields.blocked}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="4. What's blocked / tried"
+              rows={2}
+              onChange={(e) => setField("blocked", e.target.value)}
+            />
+            <textarea
+              value={fields.successCriteria}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="5. Success criteria"
+              rows={2}
+              onChange={(e) => setField("successCriteria", e.target.value)}
+            />
+            <textarea
+              value={fields.sendBack}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="6. How to send back (PR link preferred)"
+              rows={2}
+              onChange={(e) => setField("sendBack", e.target.value)}
+            />
+            <input
+              value={fields.libraryItemUrl}
+              maxLength={HELP_PACKET_FIELD_MAX}
+              placeholder="7. Optional CodeFriends library item (https://)"
+              onChange={(e) => setField("libraryItemUrl", e.target.value)}
+            />
+            <button className="ghost compact" disabled={busy || !canSave} type="submit">
+              {busy ? "Saving…" : "Save draft"}
+            </button>
+          </form>
+        )}
+        <h3 className="packet-preview-label">Markdown preview</h3>
+        <pre className="packet-preview">{markdown}</pre>
+        <div className="packet-actions">
+          <button className="primary" type="button" onClick={() => void copyMarkdown()}>
+            {copied ? "Copied" : "Copy markdown"}
+          </button>
+          <button className="ghost compact" type="button" onClick={downloadMarkdown}>
+            Download .md
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1821,6 +1914,14 @@ function Avatar({ name, status }: { name: string; status: PresenceStatus }) {
       {initials(name)}
       <i className={`dot ${status}`} />
     </span>
+  );
+}
+
+function filterHelpPackets(list: HelpPacket[], query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(
+    (packet) => packet.title.toLowerCase().includes(q) || packet.markdown.toLowerCase().includes(q),
   );
 }
 

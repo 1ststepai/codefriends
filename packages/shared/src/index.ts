@@ -507,6 +507,18 @@ export function isLibraryKind(raw: string): raw is LibraryKind {
   return (LIBRARY_KINDS as readonly string[]).includes(raw);
 }
 
+export {
+  formatHelpPacket,
+  helpPacketFilename,
+  HELP_PACKET_FIELD_MAX,
+  HELP_PACKET_LIBRARY_URL,
+  HELP_PACKET_LIST_LIMIT,
+  HELP_PACKET_MARKDOWN_MAX,
+  HELP_PACKET_SECTION_HEADINGS,
+  HELP_PACKET_TITLE_MAX,
+} from "./help-packet.js";
+export type { HelpPacket, HelpPacketFields } from "./help-packet.js";
+
 export function invitePopoutUrl(popoutUrl: string, token: string): string {
   const url = new URL(popoutUrl);
   url.searchParams.set("invite", token);

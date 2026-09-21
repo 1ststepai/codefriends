@@ -1,4 +1,4 @@
-import type { AuthProviderInfo, ForumReply, ForumTopic, LaunchPack, LibraryItem, PublicUser } from "@codefriends/shared";
+import type { AuthProviderInfo, ForumReply, ForumTopic, HelpPacket, LibraryItem, PublicUser } from "@codefriends/shared";
 import { parseInviteToken } from "@codefriends/shared";
 import { apiUrl } from "./config";
 
@@ -147,6 +147,13 @@ function topicPathId(id: string): string {
   return id;
 }
 
+function libraryPathId(id: string): string {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("Could not open that library item");
+  }
+  return id;
+}
+
 export async function getTopic(token: string, id: string) {
   const res = await fetch(apiUrl(`/api/topics/${topicPathId(id)}`), {
     headers: { authorization: `Bearer ${token}` },
@@ -191,31 +198,53 @@ export async function deleteLibraryItem(token: string, id: string) {
   if (!res.ok) throw new Error(data.error ?? "Could not remove that item");
 }
 
-export async function getLaunchPack(token: string, id: string): Promise<LaunchPack | null> {
-  const res = await fetch(apiUrl(`/api/library/${libraryPathId(id)}/launch-pack`), {
+export async function listHelpPackets(token: string) {
+  const res = await fetch(apiUrl("/api/help-packets"), {
     headers: { authorization: `Bearer ${token}` },
   });
-  const data = (await res.json()) as { pack?: LaunchPack; error?: string };
-  if (res.status === 404) return null;
-  if (!res.ok || !data.pack) throw new Error(data.error ?? "Could not load launch pack");
-  return data.pack;
+  const data = (await res.json()) as { packets?: HelpPacket[]; error?: string };
+  if (!res.ok || !data.packets) throw new Error(data.error ?? "Could not load help packets");
+  return data.packets;
 }
 
-export async function createLaunchPack(token: string, id: string): Promise<LaunchPack> {
-  const res = await fetch(apiUrl(`/api/library/${libraryPathId(id)}/launch-pack`), {
+export async function createHelpPacket(
+  token: string,
+  input: {
+    title: string;
+    goal: string;
+    repoUrl?: string;
+    branch?: string;
+    paths?: string;
+    constraints?: string;
+    blocked?: string;
+    successCriteria?: string;
+    sendBack?: string;
+    libraryItemUrl?: string;
+  },
+) {
+  const res = await fetch(apiUrl("/api/help-packets"), {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
   });
-  const data = (await res.json()) as { pack?: LaunchPack; error?: string };
-  if (!res.ok || !data.pack) throw new Error(data.error ?? "Could not generate launch pack");
-  return data.pack;
+  const data = (await res.json()) as { packet?: HelpPacket; error?: string };
+  if (!res.ok || !data.packet) throw new Error(data.error ?? "Could not save help packet");
+  return data.packet;
 }
 
-function libraryPathId(id: string): string {
+export async function getHelpPacket(token: string, id: string) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    throw new Error("Could not open that library item");
+    throw new Error("Could not open that packet");
   }
-  return id;
+  const res = await fetch(apiUrl(`/api/help-packets/${id}`), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { packet?: HelpPacket; error?: string };
+  if (!res.ok || !data.packet) throw new Error(data.error ?? "Could not open that packet");
+  return data.packet;
 }
 
 export async function addTopicReply(token: string, topicId: string, body: string) {

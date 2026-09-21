@@ -1,5 +1,13 @@
-import type { AuthProvider, ClientKind } from "@codefriends/shared";
-import { AUTH_PROVIDERS, canDraftLaunchPack, invitePopoutUrl } from "@codefriends/shared";
+import type { AuthProvider, ClientKind, HelpPacketFields } from "@codefriends/shared";
+import {
+  AUTH_PROVIDERS,
+  cleanHttpsUrl,
+  formatHelpPacket,
+  HELP_PACKET_FIELD_MAX,
+  HELP_PACKET_SECTION_HEADINGS,
+  HELP_PACKET_TITLE_MAX,
+  invitePopoutUrl,
+} from "@codefriends/shared";
 import { broadcastPresence, pushFriends } from "./broadcast.js";
 import type { RuntimeConfig } from "./config.js";
 import { randomHex } from "./crypto.js";
@@ -413,31 +421,6 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
     }
   }
 
-  const libraryLaunch = /^\/api\/library\/([^/]+)\/launch-pack$/.exec(path);
-  if (libraryLaunch && (method === "GET" || method === "POST")) {
-    const user = await store.userByToken(bearer(request));
-    if (!user) return json({ error: "Sign in first" }, 401);
-    const itemId = decodeURIComponent(libraryLaunch[1]);
-    try {
-      const item = await store.getLibraryItem(itemId);
-      if (!item) return json({ error: "Item not found" }, 404);
-      if (!canDraftLaunchPack(item, user.id)) {
-        return json({ error: "You can only draft a launch pack for your own add, or a 1stStep starter" }, 403);
-      }
-      if (method === "POST") {
-        return json({ pack: await store.upsertLaunchPack(user.id, itemId) });
-      }
-      const pack = await store.getLaunchPack(user.id, itemId);
-      if (!pack) return json({ error: "No launch pack yet" }, 404);
-      return json({ pack });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Could not load launch pack";
-      const status =
-        message === "Item not found" ? 404 : message.includes("your own add") || message.includes("1stStep") ? 403 : 400;
-      return json({ error: message }, status);
-    }
-  }
-
   const libraryOne = /^\/api\/library\/([^/]+)$/.exec(path);
   if (method === "DELETE" && libraryOne) {
     const user = await store.userByToken(bearer(request));
@@ -450,6 +433,39 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
       const status = message === "Item not found" ? 404 : message.includes("your own") ? 403 : 400;
       return json({ error: message }, status);
     }
+  }
+
+  if (method === "GET" && path === "/api/help-packets") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    return json({ packets: await store.listHelpPackets(user.id) });
+  }
+
+  if (method === "POST" && path === "/api/help-packets") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const fields = readHelpPacketFields(body);
+      const markdown = formatHelpPacket(fields);
+      for (const heading of HELP_PACKET_SECTION_HEADINGS) {
+        if (!markdown.includes(heading)) throw new Error("Packet is missing a required section");
+      }
+      const packet = await store.addHelpPacket(user.id, { title: fields.title, markdown });
+      return json({ packet });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not save help packet" }, 400);
+    }
+  }
+
+  const helpPacketOne = /^\/api\/help-packets\/([^/]+)$/.exec(path);
+  if (method === "GET" && helpPacketOne) {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    const packet = await store.getHelpPacket(decodeURIComponent(helpPacketOne[1]));
+    if (!packet) return json({ error: "Packet not found" }, 404);
+    if (packet.userId !== user.id) return json({ error: "You can only open your own packet" }, 403);
+    return json({ packet });
   }
 
   if (method === "GET" && path === "/api/presence") {
@@ -470,6 +486,32 @@ export function bearer(request: Request): string | undefined {
 
 function textField(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function boundedField(value: unknown, label: string, max: number): string {
+  const text = textField(value).trim();
+  if (text.length > max) throw new Error(`${label} is too long`);
+  return text;
+}
+
+function readHelpPacketFields(body: Record<string, unknown>): HelpPacketFields {
+  const title = boundedField(body.title, "Title", HELP_PACKET_TITLE_MAX);
+  const goal = boundedField(body.goal, "Goal", HELP_PACKET_FIELD_MAX);
+  if (!title) throw new Error("Title cannot be empty");
+  if (!goal) throw new Error("Say what done looks like");
+  const libraryRaw = boundedField(body.libraryItemUrl, "Library link", HELP_PACKET_FIELD_MAX);
+  return {
+    title,
+    goal,
+    repoUrl: boundedField(body.repoUrl, "Repo URL", HELP_PACKET_FIELD_MAX),
+    branch: boundedField(body.branch, "Branch", HELP_PACKET_FIELD_MAX),
+    paths: boundedField(body.paths, "Paths", HELP_PACKET_FIELD_MAX),
+    constraints: boundedField(body.constraints, "Constraints", HELP_PACKET_FIELD_MAX),
+    blocked: boundedField(body.blocked, "Blocked / tried", HELP_PACKET_FIELD_MAX),
+    successCriteria: boundedField(body.successCriteria, "Success criteria", HELP_PACKET_FIELD_MAX),
+    sendBack: boundedField(body.sendBack, "How to send back", HELP_PACKET_FIELD_MAX),
+    libraryItemUrl: libraryRaw ? cleanHttpsUrl(libraryRaw) : "",
+  };
 }
 
 async function readJson(request: Request): Promise<Record<string, unknown>> {
