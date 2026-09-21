@@ -56,6 +56,28 @@ export interface ChatMessage {
   createdAt: number;
 }
 
+/** School-board topic. Body is stored as plain text (markdown is fine; not rendered). */
+export interface ForumTopic {
+  id: string;
+  title: string;
+  body: string;
+  authorId: string;
+  authorUsername: string;
+  authorDisplayName: string;
+  createdAt: number;
+  replyCount: number;
+}
+
+export interface ForumReply {
+  id: string;
+  topicId: string;
+  body: string;
+  authorId: string;
+  authorUsername: string;
+  authorDisplayName: string;
+  createdAt: number;
+}
+
 export interface PresenceSummary {
   onlineCount: number;
   online: PublicUser[];
@@ -110,6 +132,10 @@ export function isValidUsername(raw: string): boolean {
 /** Last N text DMs kept per 1:1 thread. Older rows are pruned on write. */
 export const DM_HISTORY_LIMIT_DEFAULT = 200;
 export const DM_TEXT_MAX = 2000;
+export const TOPIC_TITLE_MAX = 120;
+export const TOPIC_BODY_MAX = 4000;
+export const REPLY_BODY_MAX = 2000;
+export const TOPIC_LIST_LIMIT = 50;
 export const STATUS_TEXT_MAX = 80;
 export const TOOLS_MAX = 12;
 export const TOOL_NAME_MAX = 24;

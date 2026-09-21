@@ -79,6 +79,26 @@ h1 {
   color: var(--muted);
 }
 
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 10px;
+}
+
+.mode-tabs button {
+  flex: 1;
+  background: var(--elev);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.mode-tabs button.active {
+  border-color: var(--accent);
+  color: #d7e8ff;
+}
+
 .lede,
 .fineprint {
   color: var(--muted);
@@ -100,7 +120,9 @@ h1 {
 .composer input,
 .login input,
 .status-input,
-.invite input {
+.invite input,
+.board-compose input,
+.board-compose textarea {
   width: 100%;
   background: #1b1b1b;
   border: 1px solid var(--line);
@@ -113,8 +135,17 @@ h1 {
 .composer input:focus,
 .login input:focus,
 .status-input:focus,
-.invite input:focus {
+.invite input:focus,
+.board-compose input:focus,
+.board-compose textarea:focus {
   border-color: var(--accent);
+}
+
+.board-compose textarea {
+  resize: vertical;
+  min-height: 64px;
+  font: inherit;
+  color: inherit;
 }
 
 .status-label {
@@ -328,6 +359,7 @@ h1 {
   padding: 7px 9px;
   border-radius: 6px;
   background: #2a2a2a;
+  white-space: pre-wrap;
 }
 
 .bubble.mine time {
@@ -346,7 +378,35 @@ h1 {
 }
 
 .composer {
+  display: flex;
+  gap: 6px;
+  align-items: center;
   padding: 8px 12px 12px;
+}
+
+.composer input {
+  flex: 1;
+  min-width: 0;
+}
+
+.board-compose {
+  display: grid;
+  gap: 6px;
+  padding: 4px 14px 10px;
+}
+
+.board-compose .lede {
+  margin: 0;
+  font-size: 12px;
+}
+
+.board-post p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #2a2a2a;
 }
 
 .primary,
@@ -558,11 +618,12 @@ h1 {
     max-width: 760px;
     display: grid;
     grid-template-columns: 320px 1fr;
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
     height: 100%;
   }
 
   .top,
+  .mode-tabs,
   .search,
   .self,
   .list,

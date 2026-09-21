@@ -403,6 +403,87 @@ async function waitForMatch(
   throw new Error("timed out waiting for matching WS message");
 }
 
+async function schoolBoard(dbPath: string) {
+  const server = await startServer({
+    port: 0,
+    seed: false,
+    dbPath,
+    config: { dbPath, devLogin: true },
+  });
+  try {
+    const maya = await login(server.url, "maya");
+    const kit = await login(server.url, "kit");
+
+    const denied = await fetch(`${server.url}/api/topics`);
+    assert.equal(denied.status, 401, "board is signed-in only");
+
+    const created = await json<{ topic: { id: string; title: string; authorUsername: string } }>(
+      await fetch(`${server.url}/api/topics`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${maya.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "How do you read a stack trace?",
+          body: "I keep getting lost after the first frame.",
+        }),
+      }),
+      "create topic",
+    );
+    assert.equal(created.topic.authorUsername, "maya");
+    assert.match(created.topic.title, /stack trace/);
+
+    const empty = await fetch(`${server.url}/api/topics`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${maya.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ title: "   ", body: "notes" }),
+    });
+    assert.equal(empty.status, 400, "empty title rejected");
+
+    const listed = await json<{ topics: Array<{ id: string; replyCount: number }> }>(
+      await fetch(`${server.url}/api/topics`, {
+        headers: { authorization: `Bearer ${kit.token}` },
+      }),
+      "list topics as another signed-in user",
+    );
+    assert.equal(listed.topics.length, 1);
+    assert.equal(listed.topics[0].id, created.topic.id);
+
+    const replied = await json<{ reply: { body: string }; replies: Array<{ body: string }> }>(
+      await fetch(`${server.url}/api/topics/${created.topic.id}/replies`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${kit.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ body: "Start at the first line that is your code." }),
+      }),
+      "reply",
+    );
+    assert.match(replied.reply.body, /your code/);
+
+    const opened = await json<{ topic: { replyCount: number }; replies: Array<{ authorUsername: string }> }>(
+      await fetch(`${server.url}/api/topics/${created.topic.id}`, {
+        headers: { authorization: `Bearer ${maya.token}` },
+      }),
+      "open topic",
+    );
+    assert.equal(opened.topic.replyCount, 1);
+    assert.equal(opened.replies[0].authorUsername, "kit");
+
+    const missing = await fetch(`${server.url}/api/topics/not-a-topic`, {
+      headers: { authorization: `Bearer ${maya.token}` },
+    });
+    assert.equal(missing.status, 404);
+  } finally {
+    await server.close();
+  }
+}
+
 async function servePopout(dbPath: string) {
   const popoutDir = mkdtempSync(join(tmpdir(), "codefriends-popout-"));
   mkdirSync(join(popoutDir, "assets"), { recursive: true });
@@ -444,9 +525,10 @@ async function main() {
   await persistAcrossRestart(join(dir, "persist.sqlite"));
   await historyCap(join(dir, "cap.sqlite"));
   await inviteAndStatus(join(dir, "invite.sqlite"));
+  await schoolBoard(join(dir, "board.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, school board topic+reply, popout static served",
   );
 }
 
