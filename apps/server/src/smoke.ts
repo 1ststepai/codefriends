@@ -341,6 +341,44 @@ async function inviteAndStatus(dbPath: string) {
     });
     assert.equal(presence.type, "presence");
 
+    const profile = await json<{ user: { githubUrl: string; website: string; tools: string[] } }>(
+      await fetch(`${server.url}/api/me/profile`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${kit.token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          githubUrl: "https://github.com/kit-codes",
+          website: "https://kit.example",
+          tools: "Cursor, Rust",
+        }),
+      }),
+      "update profile",
+    );
+    assert.match(profile.user.githubUrl, /github\.com\/kit-codes/);
+    assert.deepEqual(profile.user.tools, ["Cursor", "Rust"]);
+
+    const profilePush = await waitForMatch(b, (msg) => {
+      return (
+        msg.type === "presence" &&
+        msg.user.username === "kit" &&
+        Boolean(msg.user.githubUrl?.includes("kit-codes")) &&
+        (msg.user.tools ?? []).includes("Rust")
+      );
+    });
+    assert.equal(profilePush.type, "presence");
+
+    const badGithub = await fetch(`${server.url}/api/me/profile`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${kit.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ githubUrl: "https://gitlab.com/kit" }),
+    });
+    assert.equal(badGithub.status, 400, "githubUrl must be github.com");
+
     await server.store.db.prepare("UPDATE invites SET expires_at = 1").run();
     const stale = await fetch(`${server.url}/api/invites/${created.token}`);
     assert.equal(stale.status, 404, "expired invite must 404");
@@ -408,7 +446,7 @@ async function main() {
   await inviteAndStatus(join(dir, "invite.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, popout static served",
   );
 }
 

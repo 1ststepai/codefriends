@@ -230,6 +230,23 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
     }
   }
 
+  if (method === "POST" && path === "/api/me/profile") {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    try {
+      const body = await readJson(request);
+      const updated = await store.updateProfile(user.id, {
+        githubUrl: body.githubUrl !== undefined ? String(body.githubUrl) : undefined,
+        website: body.website !== undefined ? String(body.website) : undefined,
+        tools: body.tools,
+      });
+      await broadcastPresence(store, updated.id);
+      return json({ user: await store.toPublic(updated, { identities: true }) });
+    } catch (err) {
+      return json({ error: err instanceof Error ? err.message : "Could not update profile" }, 400);
+    }
+  }
+
   if (method === "GET" && path === "/api/me") {
     const user = await store.userByToken(bearer(request));
     if (!user) return json({ error: "Sign in first" }, 401);

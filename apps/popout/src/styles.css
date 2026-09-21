@@ -394,6 +394,31 @@ h1 {
   min-width: 0;
 }
 
+.profile-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.profile-bits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--soft);
+}
+
+.profile-bits a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.tools {
+  color: var(--muted);
+}
+
 .login form {
   display: grid;
   gap: 10px;

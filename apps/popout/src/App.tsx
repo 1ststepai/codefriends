@@ -17,6 +17,7 @@ import {
   mockProviderLogin,
   peekInvite,
   redeemHandoff,
+  updateProfile,
   wsUrl,
 } from "./api";
 import {
@@ -257,7 +258,7 @@ export function App() {
     <div className="shell">
       <header className="top">
         <div>
-          <div className="kicker">Community</div>
+          <div className="kicker">Learn together</div>
           <h1>CodeFriends</h1>
         </div>
         <button
@@ -279,7 +280,7 @@ export function App() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search community"
+          placeholder="Search friends"
           onKeyDown={(e) => {
             if (e.key === "Enter" && query.trim()) {
               send({ type: "add_friend", username: query.trim() });
@@ -376,12 +377,12 @@ function Login({
 
   return (
     <div className="shell login">
-      <div className="kicker">CodeFriends</div>
-      <h1>Drop in without burning IDE RAM</h1>
+      <div className="kicker">Learn together</div>
+      <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
-        Sign in with the same account you already use in Cursor, Claude, Codex, or Gemini. One
-        CodeFriends user can link several of those identities so the friends graph stays a single
-        person.
+        Presence, DMs, and a short profile — not a Discord-for-devs headline. Sign in with the same
+        account you already use in Cursor, Claude, Codex, or Gemini. One CodeFriends user can link
+        several of those identities so the friends graph stays a single person.
       </p>
       {inviteFrom ? (
         <p className="lede highlight">
@@ -602,9 +603,10 @@ function SelfBar({
             value={self.statusText}
             maxLength={STATUS_TEXT_MAX}
             onChange={(e) => onChange({ statusText: e.target.value })}
-            placeholder="a refactor, docs, pairing…"
+            placeholder="a lesson, a refactor, pairing…"
           />
         </label>
+        <ProfileEditor self={self} token={token} onSaved={onLinked} onError={onError} />
         <InviteBar token={token} onFriends={onFriends} onError={onError} />
         <LinkedAccounts
           self={self}
@@ -615,6 +617,100 @@ function SelfBar({
         />
       </div>
     </div>
+  );
+}
+
+function ProfileEditor({
+  self,
+  token,
+  onSaved,
+  onError,
+}: {
+  self: PublicUser;
+  token: string;
+  onSaved: (user: PublicUser) => void;
+  onError: (msg: string) => void;
+}) {
+  const [githubUrl, setGithubUrl] = useState(self.githubUrl ?? "");
+  const [website, setWebsite] = useState(self.website ?? "");
+  const [tools, setTools] = useState((self.tools ?? []).join(", "));
+
+  useEffect(() => {
+    setGithubUrl(self.githubUrl ?? "");
+    setWebsite(self.website ?? "");
+    setTools((self.tools ?? []).join(", "));
+  }, [self.githubUrl, self.website, self.tools]);
+
+  const save = async (patch: { githubUrl?: string; website?: string; tools?: string }) => {
+    onError("");
+    try {
+      onSaved(await updateProfile(token, patch));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Could not update profile");
+    }
+  };
+
+  return (
+    <div className="profile-edit">
+      <label className="status-label">
+        GitHub
+        <input
+          className="status-input"
+          value={githubUrl}
+          placeholder="https://github.com/you"
+          onChange={(e) => setGithubUrl(e.target.value)}
+          onBlur={() => {
+            if (githubUrl !== (self.githubUrl ?? "")) void save({ githubUrl });
+          }}
+        />
+      </label>
+      <label className="status-label">
+        Website
+        <input
+          className="status-input"
+          value={website}
+          placeholder="https://"
+          onChange={(e) => setWebsite(e.target.value)}
+          onBlur={() => {
+            if (website !== (self.website ?? "")) void save({ website });
+          }}
+        />
+      </label>
+      <label className="status-label">
+        Tools
+        <input
+          className="status-input"
+          value={tools}
+          placeholder="Cursor, Claude, Rust"
+          onChange={(e) => setTools(e.target.value)}
+          onBlur={() => {
+            if (tools !== (self.tools ?? []).join(", ")) void save({ tools });
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
+function ProfileBits({ user, links }: { user: PublicUser; links: boolean }) {
+  const tools = user.tools ?? [];
+  if (!user.githubUrl && !user.website && tools.length === 0) return null;
+  return (
+    <span className="profile-bits">
+      {tools.length ? <span className="tools">{tools.join(" · ")}</span> : null}
+      {links && user.githubUrl ? (
+        <a href={user.githubUrl} target="_blank" rel="noreferrer">
+          GitHub
+        </a>
+      ) : user.githubUrl ? (
+        <span className="tools">GitHub</span>
+      ) : null}
+      {links && user.website ? (
+        <a href={user.website} target="_blank" rel="noreferrer">
+          Site
+        </a>
+      ) : null}
+    </span>
   );
 }
 
@@ -785,6 +881,7 @@ function FriendRow({
           {showClient || friend.online ? <ClientBadge client={friend.client} /> : null}
         </span>
         <span className="status">{friend.statusText || (friend.online ? "Available" : "Offline")}</span>
+        <ProfileBits user={friend} links={false} />
       </span>
     </button>
   );
@@ -821,7 +918,7 @@ function DmPanel({
   if (!friend) {
     return (
       <section className="dm empty">
-        <p>Click a friend to DM. The IDE stays a thin badge — this popout holds the chat.</p>
+        <p>Click a friend to DM. Learn in the same room — this popout holds the chat, not the IDE.</p>
       </section>
     );
   }
@@ -831,6 +928,7 @@ function DmPanel({
       <header>
         <span>
           DM · <strong>{friend.displayName}</strong>
+          <ProfileBits user={friend} links />
         </span>
         <span className="chevron" aria-hidden>
           ▾

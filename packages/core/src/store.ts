@@ -1,9 +1,11 @@
 import {
+  cleanHttpUrl,
   conversationKey,
   DM_TEXT_MAX,
   isValidUsername,
   normalizeUsername,
   parseInviteToken,
+  parseTools,
   STATUS_TEXT_MAX,
   type AuthProvider,
   type ChatMessage,
@@ -26,6 +28,9 @@ export interface UserRecord {
   statusText: string;
   client: ClientKind;
   lastSeen: number;
+  githubUrl: string;
+  website: string;
+  tools: string;
   createdAt: number;
 }
 
@@ -37,6 +42,9 @@ interface UserRow {
   status_text: string;
   client: string;
   last_seen: number;
+  github_url?: string;
+  website?: string;
+  tools?: string;
   created_at: number;
 }
 
@@ -70,6 +78,9 @@ export class Store {
       statusText: input.statusText ?? "Available",
       client: input.client ?? "web",
       lastSeen: input.lastSeen ?? Date.now(),
+      githubUrl: "",
+      website: "",
+      tools: "",
       createdAt: Date.now(),
     };
     await this.db
@@ -267,6 +278,21 @@ export class Store {
     return user;
   }
 
+  async updateProfile(
+    userId: string,
+    patch: { githubUrl?: string; website?: string; tools?: unknown },
+  ): Promise<UserRecord> {
+    const user = await this.getUser(userId);
+    if (!user) throw new Error("Unknown user");
+    if (patch.githubUrl !== undefined) user.githubUrl = cleanHttpUrl(patch.githubUrl, "github.com");
+    if (patch.website !== undefined) user.website = cleanHttpUrl(patch.website);
+    if (patch.tools !== undefined) user.tools = parseTools(patch.tools).join(", ");
+    await this.db
+      .prepare("UPDATE users SET github_url = ?, website = ?, tools = ? WHERE id = ?")
+      .run(user.githubUrl, user.website, user.tools, user.id);
+    return user;
+  }
+
   isConnected(userId: string): boolean {
     return this.presence.isConnected(userId);
   }
@@ -296,6 +322,9 @@ export class Store {
       client: user.client,
       online,
       lastSeen: user.lastSeen,
+      githubUrl: user.githubUrl,
+      website: user.website,
+      tools: parseTools(user.tools),
       identities: opts?.identities ? await this.identitiesOf(user.id) : undefined,
     };
   }
@@ -550,6 +579,9 @@ function rowToUser(row: UserRow): UserRecord {
     statusText: row.status_text,
     client: row.client as ClientKind,
     lastSeen: row.last_seen,
+    githubUrl: row.github_url ?? "",
+    website: row.website ?? "",
+    tools: row.tools ?? "",
     createdAt: row.created_at,
   };
 }

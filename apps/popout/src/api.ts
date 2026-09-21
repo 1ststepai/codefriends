@@ -88,6 +88,23 @@ export async function acceptInvite(sessionToken: string, raw: string) {
   return { friend: data.friend, friends: data.friends };
 }
 
+export async function updateProfile(
+  token: string,
+  patch: { githubUrl?: string; website?: string; tools?: string },
+) {
+  const res = await fetch(apiUrl("/api/me/profile"), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(patch),
+  });
+  const data = (await res.json()) as { user?: PublicUser; error?: string };
+  if (!res.ok || !data.user) throw new Error(data.error ?? "Could not update profile");
+  return data.user;
+}
+
 export async function createHandoff(token: string) {
   const res = await fetch(apiUrl("/api/auth/handoff"), {
     method: "POST",

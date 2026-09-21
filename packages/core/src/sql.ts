@@ -131,4 +131,12 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS invites_expires_at ON invites(expires_at);
     `,
   },
+  {
+    name: "004_profile",
+    sql: `
+      ALTER TABLE users ADD COLUMN github_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN website TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN tools TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];
