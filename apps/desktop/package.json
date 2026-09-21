@@ -9,7 +9,7 @@
     "dev": "node scripts/wait-for-popout.mjs && tauri dev",
     "build": "tauri build",
     "tauri": "tauri",
-    "icon": "tauri icon ../popout/public/favicon.svg"
+    "icon": "tauri icon ../popout/public/brand/icon.png"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.5"

@@ -61,7 +61,9 @@ To have the IDE badge open this app instead of a browser tab, set `codefriends.p
 
 Left-click (Windows/macOS) or the menu: **Open CodeFriends**. Right-click: **Available** / **Away** (dispatches into the popout WebSocket) and **Quit**. Closing the window hides to the tray; it does not quit.
 
-Linux tray visibility depends on a StatusNotifier / AppIndicator host. XFCE needs a plugin such as `xfce4-sntray-plugin`; GNOME may need an AppIndicator extension. This Linux VM: window + StatusNotifier item verified (green/blue tray mark next to the clock); the sntray plugin ate right-clicks as panel settings, so the Open / Available / Away / Quit menu needs a macOS/Windows (or another Linux DE) smoke.
+Linux tray visibility depends on a StatusNotifier / AppIndicator host. XFCE needs a plugin such as `xfce4-sntray-plugin`; GNOME may need an AppIndicator extension. This Linux VM: window + StatusNotifier item verified (CodeFriends square mark in the tray next to the clock); the sntray plugin ate right-clicks as panel settings, so the Open / Available / Away / Quit menu needs a macOS/Windows (or another Linux DE) smoke.
+
+Regenerate bundle / tray PNGs from the official square mark with `npm run icon -w @codefriends/desktop` (source: `apps/popout/public/brand/icon.png`).
 
 ## Follow-ups (not this slice)
 
