@@ -99,6 +99,11 @@ h1 {
   color: #d7e8ff;
 }
 
+/* Library needs the list for the official shelf — profile/invites stay on Friends. */
+.shell.library-mode .self {
+  display: none;
+}
+
 .lede,
 .fineprint {
   color: var(--muted);
@@ -122,7 +127,8 @@ h1 {
 .status-input,
 .invite input,
 .board-compose input,
-.board-compose textarea {
+.board-compose textarea,
+.board-compose select {
   width: 100%;
   background: #1b1b1b;
   border: 1px solid var(--line);
@@ -137,7 +143,8 @@ h1 {
 .status-input:focus,
 .invite input:focus,
 .board-compose input:focus,
-.board-compose textarea:focus {
+.board-compose textarea:focus,
+.board-compose select:focus {
   border-color: var(--accent);
 }
 
@@ -296,6 +303,62 @@ h1 {
 .badge.gemini {
   color: var(--gemini);
   border-color: #433a72;
+}
+
+.badge.official {
+  color: #d7e8ff;
+  border-color: #2b4c72;
+  background: #1b3a55;
+}
+
+.library-hero {
+  display: grid;
+  gap: 8px;
+  padding: 4px 14px 10px;
+}
+
+.library-hero .lede {
+  margin: 0;
+  font-size: 12px;
+}
+
+.library-hero .primary {
+  width: auto;
+  justify-self: start;
+}
+
+.library-card {
+  display: grid;
+  gap: 4px;
+  width: calc(100% - 28px);
+  margin: 4px 14px 8px;
+  padding: 9px 10px;
+  text-align: left;
+  background: var(--elev);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.library-card.official {
+  border-color: #2b4c72;
+}
+
+.library-card:hover,
+.library-card.active {
+  border-color: var(--accent);
+}
+
+.library-card .status {
+  white-space: normal;
+}
+
+.library-open {
+  display: inline-block;
+  width: auto;
+  text-align: center;
+  text-decoration: none;
+  color: inherit;
 }
 
 .dm {
@@ -642,6 +705,10 @@ h1 {
   .fineprint,
   .banner {
     grid-column: 1;
+  }
+
+  .shell.library-mode:not(.login) {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   }
 
   .list {

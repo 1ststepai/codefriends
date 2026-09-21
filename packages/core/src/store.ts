@@ -1,9 +1,14 @@
 import {
   cleanHttpUrl,
+  cleanHttpsUrl,
   cleanSocialUrl,
   conversationKey,
   DM_TEXT_MAX,
+  isLibraryKind,
   isValidUsername,
+  LIBRARY_DESCRIPTION_MAX,
+  LIBRARY_LIST_LIMIT,
+  LIBRARY_TITLE_MAX,
   normalizeUsername,
   parseInviteToken,
   parseTools,
@@ -17,6 +22,9 @@ import {
   type ClientKind,
   type ForumReply,
   type ForumTopic,
+  type LibraryItem,
+  type LibraryKind,
+  type LibrarySource,
   type LinkedIdentity,
   type PresenceStatus,
   type PublicUser,
@@ -573,6 +581,105 @@ export class Store {
     return { topic: rowToTopic(row), replies: replies.map(rowToReply) };
   }
 
+  async addLibraryItem(
+    authorId: string,
+    input: { title: string; description: string; url: string; kind: string; createdAt?: number },
+    source: LibrarySource = "community",
+  ): Promise<LibraryItem> {
+    const title = input.title.trim();
+    const description = input.description.trim();
+    if (!title) throw new Error("Title cannot be empty");
+    if (!description) throw new Error("Add a short description");
+    if (title.length > LIBRARY_TITLE_MAX) throw new Error("Title is too long");
+    if (description.length > LIBRARY_DESCRIPTION_MAX) throw new Error("Description is too long");
+    if (!isLibraryKind(input.kind)) throw new Error("Pick a kind: GitHub, ChatGPT project, Demo, Prompt pack, or Other");
+    const url = cleanHttpsUrl(input.url);
+    const author = await this.getUser(authorId);
+    if (!author) throw new Error("Unknown user");
+    const now = input.createdAt ?? Date.now();
+    const item: LibraryItem = {
+      id: randomUUID(),
+      title,
+      description,
+      url,
+      kind: input.kind,
+      source,
+      authorId: author.id,
+      authorUsername: author.username,
+      authorDisplayName: author.displayName,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.db
+      .prepare(
+        `INSERT INTO library_items (id, author_id, title, description, url, kind, source, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        item.id,
+        item.authorId,
+        item.title,
+        item.description,
+        item.url,
+        item.kind,
+        item.source,
+        item.createdAt,
+        item.updatedAt,
+      );
+    return item;
+  }
+
+  async listLibraryItems(limit = LIBRARY_LIST_LIMIT): Promise<LibraryItem[]> {
+    const cap = Math.max(1, Math.min(limit, LIBRARY_LIST_LIMIT));
+    const rows = await this.db
+      .prepare(
+        `SELECT i.id, i.author_id, i.title, i.description, i.url, i.kind, i.source,
+                i.created_at, i.updated_at, u.username, u.display_name
+         FROM library_items i
+         JOIN users u ON u.id = i.author_id
+         ORDER BY CASE i.source WHEN 'official' THEN 0 ELSE 1 END, i.created_at DESC
+         LIMIT ?`,
+      )
+      .all<LibraryRow>(cap);
+    const items = rows.map(rowToLibraryItem);
+    const official = items.filter((item) => item.source === "official").sort((a, b) => a.createdAt - b.createdAt);
+    const community = items.filter((item) => item.source !== "official");
+    return [...official, ...community];
+  }
+
+  async getLibraryItem(id: string): Promise<LibraryItem | undefined> {
+    const row = await this.db
+      .prepare(
+        `SELECT i.id, i.author_id, i.title, i.description, i.url, i.kind, i.source,
+                i.created_at, i.updated_at, u.username, u.display_name
+         FROM library_items i
+         JOIN users u ON u.id = i.author_id
+         WHERE i.id = ?`,
+      )
+      .get<LibraryRow>(id);
+    return row ? rowToLibraryItem(row) : undefined;
+  }
+
+  async findOfficialLibraryByUrl(url: string): Promise<LibraryItem | undefined> {
+    const row = await this.db
+      .prepare(
+        `SELECT i.id, i.author_id, i.title, i.description, i.url, i.kind, i.source,
+                i.created_at, i.updated_at, u.username, u.display_name
+         FROM library_items i
+         JOIN users u ON u.id = i.author_id
+         WHERE i.source = 'official' AND i.url = ?`,
+      )
+      .get<LibraryRow>(url);
+    return row ? rowToLibraryItem(row) : undefined;
+  }
+
+  async deleteLibraryItem(userId: string, id: string): Promise<void> {
+    const item = await this.getLibraryItem(id);
+    if (!item) throw new Error("Item not found");
+    if (item.authorId !== userId) throw new Error("You can only remove your own item");
+    await this.db.prepare("DELETE FROM library_items WHERE id = ?").run(id);
+  }
+
   async addReply(topicId: string, authorId: string, body: string): Promise<ForumReply> {
     const cleaned = body.trim();
     if (!cleaned) throw new Error("Reply cannot be empty");
@@ -735,6 +842,20 @@ export function lastSeenLabel(ts: number): string {
   return `last seen ${Math.round(delta / 86_400_000)}d ago`;
 }
 
+interface LibraryRow {
+  id: string;
+  author_id: string;
+  title: string;
+  description: string;
+  url: string;
+  kind: LibraryKind;
+  source: LibrarySource;
+  created_at: number;
+  updated_at: number | null;
+  username: string;
+  display_name: string;
+}
+
 interface TopicRow {
   id: string;
   author_id: string;
@@ -754,6 +875,22 @@ interface ReplyRow {
   created_at: number;
   username: string;
   display_name: string;
+}
+
+function rowToLibraryItem(row: LibraryRow): LibraryItem {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    url: row.url,
+    kind: row.kind,
+    source: row.source,
+    authorId: row.author_id,
+    authorUsername: row.username,
+    authorDisplayName: row.display_name,
+    createdAt: Number(row.created_at),
+    updatedAt: row.updated_at == null ? undefined : Number(row.updated_at),
+  };
 }
 
 function rowToTopic(row: TopicRow): ForumTopic {

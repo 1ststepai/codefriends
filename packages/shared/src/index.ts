@@ -86,6 +86,35 @@ export interface ForumReply {
   createdAt: number;
 }
 
+export const LIBRARY_KINDS = ["github", "chatgpt", "demo", "prompt", "other"] as const;
+export type LibraryKind = (typeof LIBRARY_KINDS)[number];
+
+export const LIBRARY_SOURCES = ["official", "community"] as const;
+export type LibrarySource = (typeof LIBRARY_SOURCES)[number];
+
+export const LIBRARY_KIND_LABEL: Record<LibraryKind, string> = {
+  github: "GitHub",
+  chatgpt: "ChatGPT project",
+  demo: "Demo",
+  prompt: "Prompt pack",
+  other: "Other",
+};
+
+/** Build-library card. Official = seeded 1stStep shelf; community = signed-in submit. */
+export interface LibraryItem {
+  id: string;
+  title: string;
+  description: string;
+  url: string;
+  kind: LibraryKind;
+  source: LibrarySource;
+  authorId: string;
+  authorUsername: string;
+  authorDisplayName: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
 export interface PresenceSummary {
   onlineCount: number;
   online: PublicUser[];
@@ -148,6 +177,9 @@ export const STATUS_TEXT_MAX = 80;
 export const TOOLS_MAX = 12;
 export const TOOL_NAME_MAX = 24;
 export const PROFILE_URL_MAX = 200;
+export const LIBRARY_TITLE_MAX = 120;
+export const LIBRARY_DESCRIPTION_MAX = 280;
+export const LIBRARY_LIST_LIMIT = 80;
 /** Reusable invite links expire after 7 days. */
 export const INVITE_TTL_MS_DEFAULT = 7 * 24 * 60 * 60 * 1000;
 
@@ -280,6 +312,18 @@ function hostMatches(url: URL, host: string | string[]): boolean {
 
 function pathHandle(url: URL): string {
   return url.pathname.split("/").filter(Boolean)[0] ?? "";
+}
+
+/** Library links: required, https only — rejects javascript:, data:, http. */
+export function cleanHttpsUrl(raw: string): string {
+  const url = cleanHttpUrl(raw);
+  if (!url) throw new Error("URL is required");
+  if (!url.startsWith("https:")) throw new Error("URL must be https");
+  return url;
+}
+
+export function isLibraryKind(raw: string): raw is LibraryKind {
+  return (LIBRARY_KINDS as readonly string[]).includes(raw);
 }
 
 export function invitePopoutUrl(popoutUrl: string, token: string): string {

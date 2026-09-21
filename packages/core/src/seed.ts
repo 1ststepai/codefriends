@@ -1,4 +1,4 @@
-import type { ClientKind } from "@codefriends/shared";
+import type { ClientKind, LibraryKind } from "@codefriends/shared";
 import type { Store } from "./store.js";
 
 const HOUR = 3_600_000;
@@ -98,3 +98,69 @@ export async function seedDemo(store: Store): Promise<void> {
 }
 
 export const DEMO_USERNAMES = DEMO.map((d) => d.username);
+
+export const OFFICIAL_LIBRARY_USERNAME = "1ststep";
+
+/** Verified public 1ststepai GitHub starters (2026-09-21). */
+const OFFICIAL_LIBRARY: Array<{
+  title: string;
+  description: string;
+  url: string;
+  kind: LibraryKind;
+}> = [
+  {
+    title: "AI user starter kit",
+    description: "First-week toolkit — map, playbook, and safety notes. The 1stStep place to start your build.",
+    url: "https://github.com/1ststepai/ai-user-starter-kit",
+    kind: "github",
+  },
+  {
+    title: "Auto model router",
+    description: "Pick a lighter model when the task is small. Works across Cursor, Claude, and Codex.",
+    url: "https://github.com/1ststepai/auto-model-router",
+    kind: "github",
+  },
+  {
+    title: "CodeFriends",
+    description: "This school — presence, DMs, school board, and the build library. Learn with friends in the room.",
+    url: "https://github.com/1ststepai/codefriends",
+    kind: "github",
+  },
+  {
+    title: "Repo next steps",
+    description: "Paste a public repo URL and get a plain-English checklist of what to do next.",
+    url: "https://github.com/1ststepai/repo-next-steps",
+    kind: "github",
+  },
+];
+
+/** Idempotent official shelf. Always run — does not depend on the demo roster. */
+export async function seedOfficialLibrary(store: Store): Promise<void> {
+  let author = await store.userByName(OFFICIAL_LIBRARY_USERNAME);
+  if (!author) {
+    author = await store.createUser({
+      username: OFFICIAL_LIBRARY_USERNAME,
+      displayName: "1stStep",
+      client: "web",
+      statusText: "curating the starter shelf",
+    });
+    await store.ensureIdentity(author.id, {
+      provider: "dev",
+      subject: author.username,
+      displayName: author.displayName,
+      usernameHint: author.username,
+    });
+  }
+  const seededAt = 1_700_000_000_000;
+  for (const [index, row] of OFFICIAL_LIBRARY.entries()) {
+    const createdAt = seededAt + index;
+    const existing = await store.findOfficialLibraryByUrl(row.url);
+    if (existing) {
+      if (existing.createdAt !== createdAt) {
+        await store.db.prepare("UPDATE library_items SET created_at = ? WHERE id = ?").run(createdAt, existing.id);
+      }
+      continue;
+    }
+    await store.addLibraryItem(author.id, { ...row, createdAt }, "official");
+  }
+}

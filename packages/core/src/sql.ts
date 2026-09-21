@@ -179,4 +179,21 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       ALTER TABLE users ADD COLUMN wants_to_help_others_build INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    name: "008_library",
+    sql: `
+      CREATE TABLE IF NOT EXISTS library_items (
+        id TEXT PRIMARY KEY,
+        author_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        url TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        source TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS library_items_source_created ON library_items(source, created_at);
+    `,
+  },
 ];

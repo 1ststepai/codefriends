@@ -1,4 +1,11 @@
-import { applyMigrations, handleHttp, seedDemo, SnapshotPresence, Store } from "@codefriends/core";
+import {
+  applyMigrations,
+  handleHttp,
+  seedDemo,
+  seedOfficialLibrary,
+  SnapshotPresence,
+  Store,
+} from "@codefriends/core";
 import { openD1 } from "./d1.js";
 import { configFromEnv, type WorkerEnv } from "./env.js";
 import { PresenceHub } from "./hub.js";
@@ -12,8 +19,9 @@ async function ensureReady(env: WorkerEnv, requestUrl: string): Promise<void> {
     boot = (async () => {
       const sql = openD1(env.DB);
       await applyMigrations(sql);
+      const store = new Store(sql, configFromEnv(env, requestUrl), new SnapshotPresence(new Set()));
+      await seedOfficialLibrary(store);
       if (env.CODEFRIENDS_SEED !== "0") {
-        const store = new Store(sql, configFromEnv(env, requestUrl), new SnapshotPresence(new Set()));
         await seedDemo(store);
       }
     })().catch((err) => {

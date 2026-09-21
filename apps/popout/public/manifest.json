@@ -1,7 +1,7 @@
 {
   "name": "CodeFriends",
   "short_name": "CodeFriends",
-  "description": "An AI coding school with your friends in the room. Presence, DMs, and profiles — lightweight popout, not inside the IDE.",
+  "description": "An AI coding school with your friends in the room. Presence, DMs, school board, and a build library — lightweight popout, not inside the IDE.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1e1e1e",

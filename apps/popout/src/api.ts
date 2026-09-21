@@ -1,4 +1,4 @@
-import type { AuthProviderInfo, ForumReply, ForumTopic, PublicUser } from "@codefriends/shared";
+import type { AuthProviderInfo, ForumReply, ForumTopic, LibraryItem, PublicUser } from "@codefriends/shared";
 import { parseInviteToken } from "@codefriends/shared";
 import { apiUrl } from "./config";
 
@@ -154,6 +154,44 @@ export async function getTopic(token: string, id: string) {
   const data = (await res.json()) as { topic?: ForumTopic; replies?: ForumReply[]; error?: string };
   if (!res.ok || !data.topic) throw new Error(data.error ?? "Could not open that thread");
   return { topic: data.topic, replies: data.replies ?? [] };
+}
+
+export async function listLibrary(token: string) {
+  const res = await fetch(apiUrl("/api/library"), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { items?: LibraryItem[]; error?: string };
+  if (!res.ok || !data.items) throw new Error(data.error ?? "Could not load the build library");
+  return data.items;
+}
+
+export async function addLibraryItem(
+  token: string,
+  input: { title: string; description: string; url: string; kind: string },
+) {
+  const res = await fetch(apiUrl("/api/library"), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json()) as { item?: LibraryItem; error?: string };
+  if (!res.ok || !data.item) throw new Error(data.error ?? "Could not add to the library");
+  return data.item;
+}
+
+export async function deleteLibraryItem(token: string, id: string) {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("Could not remove that item");
+  }
+  const res = await fetch(apiUrl(`/api/library/${id}`), {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as { ok?: boolean; error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Could not remove that item");
 }
 
 export async function addTopicReply(token: string, topicId: string, body: string) {

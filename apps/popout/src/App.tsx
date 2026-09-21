@@ -4,6 +4,7 @@ import type {
   ClientKind,
   ForumReply,
   ForumTopic,
+  LibraryItem,
   PresenceStatus,
   PublicUser,
   WsServerMessage,
@@ -11,6 +12,10 @@ import type {
 import {
   CLIENTS,
   CLIENT_LABEL,
+  LIBRARY_DESCRIPTION_MAX,
+  LIBRARY_KIND_LABEL,
+  LIBRARY_KINDS,
+  LIBRARY_TITLE_MAX,
   parseInviteToken,
   REPLY_BODY_MAX,
   STATUS_TEXT_MAX,
@@ -20,12 +25,15 @@ import {
 import type { AuthProviderInfo } from "@codefriends/shared";
 import {
   acceptInvite,
+  addLibraryItem,
   addTopicReply,
   apiUrl,
   createInvite,
   createTopic,
+  deleteLibraryItem,
   fetchProviders,
   getTopic,
+  listLibrary,
   listTopics,
   login,
   mockProviderLogin,
@@ -63,11 +71,13 @@ export function App() {
   const [pendingInvite, setPendingInvite] = useState(() => inviteFromLocation() || loadPendingInvite());
   const [inviteFrom, setInviteFrom] = useState<PublicUser | null>(null);
   const [wsReady, setWsReady] = useState(false);
-  const [view, setView] = useState<"friends" | "board">("friends");
+  const [view, setView] = useState<"friends" | "board" | "library">("friends");
   const [topics, setTopics] = useState<ForumTopic[]>([]);
   const [openTopicId, setOpenTopicId] = useState<string | null>(null);
   const [openTopic, setOpenTopic] = useState<ForumTopic | null>(null);
   const [replies, setReplies] = useState<ForumReply[]>([]);
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+  const [openLibraryId, setOpenLibraryId] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -240,6 +250,21 @@ export function App() {
   }, [token, view]);
 
   useEffect(() => {
+    if (!token || view !== "library") return;
+    let cancelled = false;
+    listLibrary(token)
+      .then((items) => {
+        if (!cancelled) setLibraryItems(items);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load the build library");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, view]);
+
+  useEffect(() => {
     if (!token || !openTopicId) {
       setOpenTopic(null);
       setReplies([]);
@@ -270,6 +295,8 @@ export function App() {
   const filteredAgents = filterPeople(agents, query);
   const filteredPeople = filterPeople(people, query);
   const filteredTopics = filterTopics(topics, query);
+  const filteredLibrary = filterLibrary(libraryItems, query);
+  const openLibrary = libraryItems.find((item) => item.id === openLibraryId) ?? null;
   const active = friends.find((f) => f.id === activeId) ?? null;
   const thread = useMemo(
     () =>
@@ -311,7 +338,7 @@ export function App() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell${view === "library" ? " library-mode" : ""}`}>
       <header className="top">
         <div>
           <div className="kicker">Learn together</div>
@@ -346,14 +373,25 @@ export function App() {
         >
           School board
         </button>
+        <button
+          type="button"
+          className={view === "library" ? "active" : ""}
+          onClick={() => setView("library")}
+        >
+          Library
+        </button>
       </nav>
 
       <label className="search">
-        <span className="sr-only">{view === "board" ? "Search the school board" : "Search friends"}</span>
+        <span className="sr-only">
+          {view === "board" ? "Search the school board" : view === "library" ? "Search the library" : "Search friends"}
+        </span>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={view === "board" ? "Search the school board" : "Search friends"}
+          placeholder={
+            view === "board" ? "Search the school board" : view === "library" ? "Search the library" : "Search friends"
+          }
           onKeyDown={(e) => {
             if (view === "friends" && e.key === "Enter" && query.trim()) {
               send({ type: "add_friend", username: query.trim() });
@@ -398,7 +436,7 @@ export function App() {
             />
           ))}
         </section>
-      ) : (
+      ) : view === "board" ? (
         <TopicList
           token={token}
           topics={filteredTopics}
@@ -411,6 +449,23 @@ export function App() {
             setReplies([]);
           }}
           onOpen={setOpenTopicId}
+        />
+      ) : (
+        <LibraryList
+          token={token}
+          items={filteredLibrary}
+          activeId={openLibraryId}
+          onError={setError}
+          onAdded={(item) => {
+            setLibraryItems((cur) => {
+              const next = [item, ...cur.filter((row) => row.id !== item.id)];
+              const official = next.filter((row) => row.source === "official");
+              const community = next.filter((row) => row.source !== "official");
+              return [...official, ...community];
+            });
+            setOpenLibraryId(item.id);
+          }}
+          onOpen={setOpenLibraryId}
         />
       )}
 
@@ -429,7 +484,7 @@ export function App() {
           }}
           onTyping={(typing) => active && send({ type: "typing", to: active.id, typing })}
         />
-      ) : (
+      ) : view === "board" ? (
         <BoardPanel
           token={token}
           topic={openTopic}
@@ -439,6 +494,17 @@ export function App() {
             setOpenTopic(topic);
             setReplies(nextReplies);
             setTopics((cur) => cur.map((t) => (t.id === topic.id ? topic : t)));
+          }}
+        />
+      ) : (
+        <LibraryPanel
+          token={token}
+          selfId={self.id}
+          item={openLibrary}
+          onError={setError}
+          onRemoved={(id) => {
+            setLibraryItems((cur) => cur.filter((row) => row.id !== id));
+            setOpenLibraryId((cur) => (cur === id ? null : cur));
           }}
         />
       )}
@@ -484,9 +550,9 @@ function Login({
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
         Learn with friends while you use Cursor, Claude, Codex, or Gemini. Presence, DMs, a short
-        profile (GitHub / tools / optional socials), and a school board for the cohort —
-        prompt/knowledge base and learning paths next. One CodeFriends user can link several of
-        those identities so you stay a single person in the room.
+        profile (GitHub / tools / optional socials), a school board, and a build library of 1stStep
+        starters plus projects the cohort shares. One CodeFriends user can link several of those
+        identities so you stay a single person in the room.
       </p>
       {inviteFrom ? (
         <p className="lede highlight">
@@ -1330,6 +1396,205 @@ function BoardPanel({
   );
 }
 
+function LibraryList({
+  token,
+  items,
+  activeId,
+  onOpen,
+  onAdded,
+  onError,
+}: Readonly<{
+  token: string;
+  items: LibraryItem[];
+  activeId: string | null;
+  onOpen: (id: string) => void;
+  onAdded: (item: LibraryItem) => void;
+  onError: (msg: string) => void;
+}>) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [url, setUrl] = useState("");
+  const [kind, setKind] = useState<(typeof LIBRARY_KINDS)[number]>("github");
+  const [busy, setBusy] = useState(false);
+  const official = items.filter((item) => item.source === "official");
+  const community = items.filter((item) => item.source !== "official");
+  const starter = official[0];
+
+  return (
+    <section className="list">
+      <div className="library-hero">
+        <p className="lede">
+          Start a build from the trusted <strong>1stStep</strong> shelf, then share a ChatGPT
+          project, repo, or demo so friends can learn with you.
+        </p>
+        <button
+          className="primary"
+          type="button"
+          disabled={!starter}
+          onClick={() => starter && onOpen(starter.id)}
+        >
+          Start your build
+        </button>
+      </div>
+      <SectionTitle label="1stStep shelf" count={official.length} />
+      {official.map((item) => (
+        <LibraryCard key={item.id} item={item} active={item.id === activeId} onOpen={() => onOpen(item.id)} />
+      ))}
+      <form
+        className="board-compose"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!title.trim() || !description.trim() || !url.trim()) return;
+          setBusy(true);
+          onError("");
+          try {
+            onAdded(await addLibraryItem(token, { title, description, url, kind }));
+            setTitle("");
+            setDescription("");
+            setUrl("");
+          } catch (err) {
+            onError(err instanceof Error ? err.message : "Could not add to the library");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <p className="lede">Share what you are building. Anyone signed in can add a link — https only.</p>
+        <input
+          value={title}
+          maxLength={LIBRARY_TITLE_MAX}
+          placeholder="Title"
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <textarea
+          value={description}
+          maxLength={LIBRARY_DESCRIPTION_MAX}
+          placeholder="Short description"
+          rows={2}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+        <input
+          value={url}
+          placeholder="https://"
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <label className="status-label">
+          Kind
+          <select value={kind} onChange={(e) => setKind(e.target.value as (typeof LIBRARY_KINDS)[number])}>
+            {LIBRARY_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {LIBRARY_KIND_LABEL[k]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="ghost compact"
+          disabled={busy || !title.trim() || !description.trim() || !url.trim()}
+          type="submit"
+        >
+          {busy ? "Adding…" : "Add to the library"}
+        </button>
+      </form>
+      <SectionTitle label="From the cohort" count={community.length} />
+      {community.map((item) => (
+        <LibraryCard key={item.id} item={item} active={item.id === activeId} onOpen={() => onOpen(item.id)} />
+      ))}
+    </section>
+  );
+}
+
+function LibraryCard({
+  item,
+  active,
+  onOpen,
+}: {
+  item: LibraryItem;
+  active: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`library-card ${item.source} ${active ? "active" : ""}`}
+      onClick={onOpen}
+    >
+      <span className="name-line">
+        <strong>{item.title}</strong>
+        {item.source === "official" ? <span className="badge official">1stStep</span> : null}
+        <span className="badge">{LIBRARY_KIND_LABEL[item.kind]}</span>
+      </span>
+      <span className="status">{item.description}</span>
+    </button>
+  );
+}
+
+function LibraryPanel({
+  token,
+  selfId,
+  item,
+  onRemoved,
+  onError,
+}: Readonly<{
+  token: string;
+  selfId: string;
+  item: LibraryItem | null;
+  onRemoved: (id: string) => void;
+  onError: (msg: string) => void;
+}>) {
+  const [busy, setBusy] = useState(false);
+  if (!item) {
+    return (
+      <section className="dm empty">
+        <p>Open a starter from the 1stStep shelf, or a project a friend shared. Learn together — then ship with friends.</p>
+      </section>
+    );
+  }
+  const own = item.authorId === selfId && item.source === "community";
+  return (
+    <section className="dm">
+      <header>
+        <span>
+          Build library · <strong>{item.title}</strong>
+        </span>
+        <span className="status">
+          {item.source === "official" ? "Trusted 1stStep starter" : item.authorDisplayName} ·{" "}
+          {LIBRARY_KIND_LABEL[item.kind]}
+        </span>
+      </header>
+      <div className="thread">
+        <article className="board-post">
+          <p>{item.description}</p>
+        </article>
+        <a className="primary library-open" href={item.url} target="_blank" rel="noreferrer">
+          Open {item.source === "official" ? "starter" : "link"}
+        </a>
+        {own ? (
+          <button
+            className="ghost compact"
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              onError("");
+              try {
+                await deleteLibraryItem(token, item.id);
+                onRemoved(item.id);
+              } catch (err) {
+                onError(err instanceof Error ? err.message : "Could not remove that item");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Removing…" : "Remove my item"}
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function SectionTitle({ label, count }: { label: string; count: number }) {
   return (
     <h2>
@@ -1345,6 +1610,19 @@ function Avatar({ name, status }: { name: string; status: PresenceStatus }) {
       {initials(name)}
       <i className={`dot ${status}`} />
     </span>
+  );
+}
+
+function filterLibrary(list: LibraryItem[], query: string) {
+  const q = query.trim().toLowerCase();
+  if (!q) return list;
+  return list.filter(
+    (item) =>
+      item.title.toLowerCase().includes(q) ||
+      item.description.toLowerCase().includes(q) ||
+      item.url.toLowerCase().includes(q) ||
+      item.authorDisplayName.toLowerCase().includes(q) ||
+      item.kind.toLowerCase().includes(q),
   );
 }
 
