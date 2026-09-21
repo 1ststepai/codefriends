@@ -1,5 +1,5 @@
 import type { AuthProvider, ClientKind } from "@codefriends/shared";
-import { AUTH_PROVIDERS, invitePopoutUrl } from "@codefriends/shared";
+import { AUTH_PROVIDERS, canDraftLaunchPack, invitePopoutUrl } from "@codefriends/shared";
 import { broadcastPresence, pushFriends } from "./broadcast.js";
 import type { RuntimeConfig } from "./config.js";
 import { randomHex } from "./crypto.js";
@@ -398,6 +398,31 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
       return json({ item });
     } catch (err) {
       return json({ error: err instanceof Error ? err.message : "Could not add to the library" }, 400);
+    }
+  }
+
+  const libraryLaunch = /^\/api\/library\/([^/]+)\/launch-pack$/.exec(path);
+  if (libraryLaunch && (method === "GET" || method === "POST")) {
+    const user = await store.userByToken(bearer(request));
+    if (!user) return json({ error: "Sign in first" }, 401);
+    const itemId = decodeURIComponent(libraryLaunch[1]);
+    try {
+      const item = await store.getLibraryItem(itemId);
+      if (!item) return json({ error: "Item not found" }, 404);
+      if (!canDraftLaunchPack(item, user.id)) {
+        return json({ error: "You can only draft a launch pack for your own add, or a 1stStep starter" }, 403);
+      }
+      if (method === "POST") {
+        return json({ pack: await store.upsertLaunchPack(user.id, itemId) });
+      }
+      const pack = await store.getLaunchPack(user.id, itemId);
+      if (!pack) return json({ error: "No launch pack yet" }, 404);
+      return json({ pack });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not load launch pack";
+      const status =
+        message === "Item not found" ? 404 : message.includes("your own add") || message.includes("1stStep") ? 403 : 400;
+      return json({ error: message }, status);
     }
   }
 

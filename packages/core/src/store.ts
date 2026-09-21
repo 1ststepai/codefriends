@@ -4,6 +4,8 @@ import {
   cleanSocialUrl,
   conversationKey,
   DM_TEXT_MAX,
+  canDraftLaunchPack,
+  draftLaunchCopy,
   isLibraryKind,
   isValidUsername,
   LIBRARY_DESCRIPTION_MAX,
@@ -22,6 +24,7 @@ import {
   type ClientKind,
   type ForumReply,
   type ForumTopic,
+  type LaunchPack,
   type LibraryItem,
   type LibraryKind,
   type LibrarySource,
@@ -677,7 +680,80 @@ export class Store {
     const item = await this.getLibraryItem(id);
     if (!item) throw new Error("Item not found");
     if (item.authorId !== userId) throw new Error("You can only remove your own item");
+    await this.db.prepare("DELETE FROM launch_packs WHERE library_item_id = ?").run(id);
     await this.db.prepare("DELETE FROM library_items WHERE id = ?").run(id);
+  }
+
+  async getLaunchPack(userId: string, libraryItemId: string): Promise<LaunchPack | undefined> {
+    const row = await this.db
+      .prepare(
+        `SELECT id, library_item_id, user_id, show_hn_title, show_hn_body, reddit_title, reddit_body,
+                social_short, social_long, friend_blurb, created_at, updated_at
+         FROM launch_packs WHERE library_item_id = ? AND user_id = ?`,
+      )
+      .get<LaunchPackRow>(libraryItemId, userId);
+    return row ? rowToLaunchPack(row) : undefined;
+  }
+
+  async upsertLaunchPack(userId: string, libraryItemId: string): Promise<LaunchPack> {
+    const item = await this.getLibraryItem(libraryItemId);
+    if (!item) throw new Error("Item not found");
+    if (!canDraftLaunchPack(item, userId)) {
+      throw new Error("You can only draft a launch pack for your own add, or a 1stStep starter");
+    }
+    const author = await this.getUser(userId);
+    if (!author) throw new Error("Unknown user");
+    const copy = draftLaunchCopy(item);
+    const now = Date.now();
+    const existing = await this.getLaunchPack(userId, libraryItemId);
+    if (existing) {
+      await this.db
+        .prepare(
+          `UPDATE launch_packs SET show_hn_title = ?, show_hn_body = ?, reddit_title = ?, reddit_body = ?,
+           social_short = ?, social_long = ?, friend_blurb = ?, updated_at = ? WHERE id = ?`,
+        )
+        .run(
+          copy.showHnTitle,
+          copy.showHnBody,
+          copy.redditTitle,
+          copy.redditBody,
+          copy.socialShort,
+          copy.socialLong,
+          copy.friendBlurb,
+          now,
+          existing.id,
+        );
+      return { ...existing, ...copy, updatedAt: now };
+    }
+    const pack: LaunchPack = {
+      id: randomUUID(),
+      libraryItemId: item.id,
+      userId: author.id,
+      ...copy,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.db
+      .prepare(
+        `INSERT INTO launch_packs (id, library_item_id, user_id, show_hn_title, show_hn_body, reddit_title,
+         reddit_body, social_short, social_long, friend_blurb, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        pack.id,
+        pack.libraryItemId,
+        pack.userId,
+        pack.showHnTitle,
+        pack.showHnBody,
+        pack.redditTitle,
+        pack.redditBody,
+        pack.socialShort,
+        pack.socialLong,
+        pack.friendBlurb,
+        pack.createdAt,
+        pack.updatedAt,
+      );
+    return pack;
   }
 
   async addReply(topicId: string, authorId: string, body: string): Promise<ForumReply> {
@@ -856,6 +932,21 @@ interface LibraryRow {
   display_name: string;
 }
 
+interface LaunchPackRow {
+  id: string;
+  library_item_id: string;
+  user_id: string;
+  show_hn_title: string;
+  show_hn_body: string;
+  reddit_title: string;
+  reddit_body: string;
+  social_short: string;
+  social_long: string;
+  friend_blurb: string;
+  created_at: number;
+  updated_at: number;
+}
+
 interface TopicRow {
   id: string;
   author_id: string;
@@ -890,6 +981,23 @@ function rowToLibraryItem(row: LibraryRow): LibraryItem {
     authorDisplayName: row.display_name,
     createdAt: Number(row.created_at),
     updatedAt: row.updated_at == null ? undefined : Number(row.updated_at),
+  };
+}
+
+function rowToLaunchPack(row: LaunchPackRow): LaunchPack {
+  return {
+    id: row.id,
+    libraryItemId: row.library_item_id,
+    userId: row.user_id,
+    showHnTitle: row.show_hn_title,
+    showHnBody: row.show_hn_body,
+    redditTitle: row.reddit_title,
+    redditBody: row.reddit_body,
+    socialShort: row.social_short,
+    socialLong: row.social_long,
+    friendBlurb: row.friend_blurb,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
   };
 }
 

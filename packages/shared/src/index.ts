@@ -115,6 +115,106 @@ export interface LibraryItem {
   updatedAt?: number;
 }
 
+/** Per-user draft copy for distributing a library item. Never auto-posted. */
+export interface LaunchPack {
+  id: string;
+  libraryItemId: string;
+  userId: string;
+  showHnTitle: string;
+  showHnBody: string;
+  redditTitle: string;
+  redditBody: string;
+  socialShort: string;
+  socialLong: string;
+  friendBlurb: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export const SHOW_HN_TITLE_MAX = 80;
+export const REDDIT_TITLE_MAX = 300;
+export const SOCIAL_SHORT_MAX = 280;
+export const LAUNCH_BODY_MAX = 2000;
+export const FRIEND_BLURB_MAX = 280;
+
+/** Official shelf: any signed-in user. Community: author of that add only. */
+export function canDraftLaunchPack(item: Pick<LibraryItem, "source" | "authorId">, userId: string): boolean {
+  return item.source === "official" || item.authorId === userId;
+}
+
+/** Template drafts from the library card. Education-first; no LLM. */
+export function draftLaunchCopy(item: Pick<LibraryItem, "title" | "description" | "url" | "kind" | "source">): Omit<
+  LaunchPack,
+  "id" | "libraryItemId" | "userId" | "createdAt" | "updatedAt"
+> {
+  const title = item.title.trim();
+  const description = item.description.trim();
+  const url = item.url.trim();
+  const kind = LIBRARY_KIND_LABEL[item.kind] ?? "project";
+  const together =
+    item.source === "official"
+      ? `I'm learning from this 1stStep ${kind.toLowerCase()} with friends on CodeFriends — an AI coding school where we learn and ship together.`
+      : `I built this ${kind.toLowerCase()} while learning with friends on CodeFriends — an AI coding school where we learn and ship together.`;
+
+  const showHnTitle = clip(`Show HN: ${title}`, SHOW_HN_TITLE_MAX);
+  const showHnBody = clip(
+    [description, "", url, "", `${together} Happy to walk through what we tried. Feedback welcome.`].join("\n"),
+    LAUNCH_BODY_MAX,
+  );
+
+  const redditTitle = clip(`${title} (${kind}) — looking for feedback from people learning to ship`, REDDIT_TITLE_MAX);
+  const redditBody = clip(
+    [
+      description,
+      "",
+      url,
+      "",
+      `${together} If you have time, I'd love notes on what to improve next.`,
+    ].join("\n"),
+    LAUNCH_BODY_MAX,
+  );
+
+  const socialShort = fitBeforeUrl(
+    `${title} — ${description} Learn and ship together on CodeFriends.`,
+    url,
+    SOCIAL_SHORT_MAX,
+  );
+  const socialLong = clip(
+    [
+      `I shared ${title} in the CodeFriends library.`,
+      "",
+      description,
+      "",
+      url,
+      "",
+      `${together} If you're building something too, I'd love to trade notes — no hype, just the work.`,
+    ].join("\n"),
+    LAUNCH_BODY_MAX,
+  );
+
+  const friendBlurb = clip(
+    item.source === "official"
+      ? `I'm starting from "${title}" on the 1stStep shelf: ${url} Want to look it over together and ship the next slice?`
+      : `I added "${title}" to the library: ${url} Want to look it over together and help me ship the next slice?`,
+    FRIEND_BLURB_MAX,
+  );
+
+  return { showHnTitle, showHnBody, redditTitle, redditBody, socialShort, socialLong, friendBlurb };
+}
+
+function clip(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  if (max <= 1) return "…";
+  return `${trimmed.slice(0, max - 1).trimEnd()}…`;
+}
+
+function fitBeforeUrl(head: string, url: string, max: number): string {
+  const tail = `\n${url}`;
+  if (tail.length >= max) return clip(url, max);
+  return `${clip(head, max - tail.length)}${tail}`;
+}
+
 export interface PresenceSummary {
   onlineCount: number;
   online: PublicUser[];

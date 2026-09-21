@@ -601,7 +601,7 @@ async function buildLibrary(dbPath: string) {
     assert.equal(denied.status, 401, "library is signed-in only");
 
     const listed = await json<{
-      items: Array<{ title: string; source: string; url: string; authorUsername: string }>;
+      items: Array<{ id: string; title: string; source: string; url: string; authorUsername: string }>;
     }>(
       await fetch(`${server.url}/api/library`, {
         headers: { authorization: `Bearer ${kit.token}` },
@@ -678,6 +678,96 @@ async function buildLibrary(dbPath: string) {
     });
     assert.equal(steal.status, 403, "cannot delete someone else's item");
 
+    const deniedPack = await fetch(`${server.url}/api/library/${created.item.id}/launch-pack`);
+    assert.equal(deniedPack.status, 401, "launch pack is signed-in only");
+
+    const missingPack = await fetch(`${server.url}/api/library/${created.item.id}/launch-pack`, {
+      headers: { authorization: `Bearer ${maya.token}` },
+    });
+    assert.equal(missingPack.status, 404, "no pack until generated");
+
+    const stealPack = await fetch(`${server.url}/api/library/${created.item.id}/launch-pack`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${kit.token}` },
+    });
+    assert.equal(stealPack.status, 403, "cannot draft someone else's community add");
+    const stealGet = await fetch(`${server.url}/api/library/${created.item.id}/launch-pack`, {
+      headers: { authorization: `Bearer ${kit.token}` },
+    });
+    assert.equal(stealGet.status, 403, "cannot fetch someone else's community pack");
+
+    const generated = await json<{
+      pack: {
+        id: string;
+        showHnTitle: string;
+        showHnBody: string;
+        redditTitle: string;
+        redditBody: string;
+        socialShort: string;
+        socialLong: string;
+        friendBlurb: string;
+        updatedAt: number;
+      };
+    }>(
+      await fetch(`${server.url}/api/library/${created.item.id}/launch-pack`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${maya.token}` },
+      }),
+      "generate launch pack",
+    );
+    const pack = generated.pack;
+    assert.ok(pack.showHnTitle.startsWith("Show HN:"), "Show HN title");
+    assert.match(pack.showHnBody, /chatgpt\.com\/share\/example-lesson/);
+    assert.ok(pack.redditTitle.includes("ChatGPT"));
+    assert.match(pack.redditBody, /learn and ship together/i);
+    assert.ok(pack.socialShort.length > 0 && pack.socialShort.length <= 280, "X-length social");
+    assert.ok(pack.socialLong.includes("CodeFriends"));
+    assert.ok(pack.friendBlurb.includes("library"));
+    const banned = /go viral|casino|steam clone/i;
+    for (const field of [
+      pack.showHnTitle,
+      pack.showHnBody,
+      pack.redditTitle,
+      pack.redditBody,
+      pack.socialShort,
+      pack.socialLong,
+      pack.friendBlurb,
+    ]) {
+      assert.equal(banned.test(field), false, "education-first copy");
+    }
+
+    const fetched = await json<{ pack: { id: string; showHnTitle: string; socialShort: string } }>(
+      await fetch(`${server.url}/api/library/${created.item.id}/launch-pack`, {
+        headers: { authorization: `Bearer ${maya.token}` },
+      }),
+      "fetch latest launch pack",
+    );
+    assert.equal(fetched.pack.id, pack.id);
+    assert.equal(fetched.pack.showHnTitle, pack.showHnTitle);
+    assert.equal(fetched.pack.socialShort, pack.socialShort);
+
+    const again = await json<{ pack: { id: string; updatedAt: number } }>(
+      await fetch(`${server.url}/api/library/${created.item.id}/launch-pack`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${maya.token}` },
+      }),
+      "regenerate launch pack",
+    );
+    assert.equal(again.pack.id, pack.id);
+    assert.ok(again.pack.updatedAt >= pack.updatedAt);
+
+    const officialId = listed.items.find((item) => item.source === "official")?.id;
+    assert.ok(officialId);
+    const officialPack = await json<{ pack: { socialShort: string; friendBlurb: string } }>(
+      await fetch(`${server.url}/api/library/${officialId}/launch-pack`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${kit.token}` },
+      }),
+      "kit can draft an official starter",
+    );
+    assert.ok(officialPack.pack.socialShort.length > 0);
+    assert.match(officialPack.pack.friendBlurb, /1stStep shelf|starter/i);
+
     const withIds = await json<{ items: Array<{ id: string; source: string }> }>(
       await fetch(`${server.url}/api/library`, {
         headers: { authorization: `Bearer ${maya.token}` },
@@ -749,7 +839,7 @@ async function main() {
   await buildLibrary(join(dir, "library.sqlite"));
   await servePopout(join(dir, "popout.sqlite"));
   console.log(
-    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, popout static served",
+    "smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, launch pack drafts, popout static served",
   );
 }
 

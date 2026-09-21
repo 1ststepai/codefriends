@@ -196,4 +196,24 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS library_items_source_created ON library_items(source, created_at);
     `,
   },
+  {
+    name: "009_launch_packs",
+    sql: `
+      CREATE TABLE IF NOT EXISTS launch_packs (
+        id TEXT PRIMARY KEY,
+        library_item_id TEXT NOT NULL REFERENCES library_items(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        show_hn_title TEXT NOT NULL,
+        show_hn_body TEXT NOT NULL,
+        reddit_title TEXT NOT NULL,
+        reddit_body TEXT NOT NULL,
+        social_short TEXT NOT NULL,
+        social_long TEXT NOT NULL,
+        friend_blurb TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE (library_item_id, user_id)
+      );
+    `,
+  },
 ];
