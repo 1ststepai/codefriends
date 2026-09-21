@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   ChatMessage,
   ClientKind,
@@ -59,11 +59,17 @@ import {
   savePendingInvite,
   saveSession,
 } from "./session";
+import { loadTheme, saveTheme, THEMES, type ThemeId } from "./theme";
 
 const AGENT_CLIENTS = new Set<ClientKind>(["cursor", "claude", "codex", "gemini"]);
 
 export function App() {
   const stored = loadSession();
+  const [theme, setThemeState] = useState<ThemeId>(loadTheme);
+  const setTheme = (id: ThemeId) => {
+    saveTheme(id);
+    setThemeState(id);
+  };
   const [token, setToken] = useState(stored?.token ?? "");
   const [self, setSelf] = useState<PublicUser | null>(stored?.user ?? null);
   const [friends, setFriends] = useState<PublicUser[]>([]);
@@ -349,8 +355,12 @@ export function App() {
   if (bootstrapping) {
     return (
       <div className="shell login">
-        <img className="brand-lockup" src="/brand/logo-lockup.png" alt="codefriends.1ststep.ai" />
-        <div className="kicker">CodeFriends</div>
+        <header className="login-brand">
+          <span className="login-mark" aria-hidden="true">
+            <img src="/brand/icon-192.png" alt="" />
+          </span>
+          <p className="login-wordmark">CodeFriends</p>
+        </header>
         <h1>Opening your session…</h1>
       </div>
     );
@@ -359,6 +369,8 @@ export function App() {
   if (!token || !self) {
     return (
       <Login
+        theme={theme}
+        onTheme={setTheme}
         onError={setError}
         error={error}
         providers={providers}
@@ -378,7 +390,9 @@ export function App() {
     <div className={`shell view-${view}`}>
       <header className="top">
         <div className="top-brand">
-          <img className="brand-icon" src="/brand/icon.png" alt="" />
+          <span className="brand-icon">
+            <img src="/brand/icon-192.png" alt="" />
+          </span>
           <h1>CodeFriends</h1>
         </div>
         <button
@@ -596,6 +610,7 @@ export function App() {
         />
       ) : (
         <section className="dm profile-pane">
+          <ThemeSwitcher value={theme} onChange={setTheme} />
           <SelfBar
             self={self}
             connected={connected}
@@ -626,6 +641,8 @@ export function App() {
 }
 
 function Login({
+  theme,
+  onTheme,
   error,
   onError,
   onReady,
@@ -633,6 +650,8 @@ function Login({
   mockProviders,
   inviteFrom,
 }: {
+  theme: ThemeId;
+  onTheme: (id: ThemeId) => void;
   error: string;
   onError: (msg: string) => void;
   onReady: (token: string, user: PublicUser) => void;
@@ -662,7 +681,12 @@ function Login({
 
   return (
     <div className="shell login">
-      <img className="brand-lockup" src="/brand/logo-lockup.png" alt="codefriends.1ststep.ai" />
+      <header className="login-brand">
+        <span className="login-mark" aria-hidden="true">
+          <img src="/brand/icon-192.png" alt="" />
+        </span>
+        <p className="login-wordmark">CodeFriends</p>
+      </header>
       <div className="kicker">Learn together</div>
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
@@ -709,6 +733,7 @@ function Login({
           <span className="provider-state">{google ? availabilityLabel(google) : "loading"}</span>
         </button>
       )}
+      <ThemeSwitcher value={theme} onChange={onTheme} />
       {later.length ? (
         <details className="coming-later">
           <summary>Coming later</summary>
@@ -750,7 +775,6 @@ function Login({
           <label>
             Username
             <input
-              autoFocus
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="maya"
@@ -828,6 +852,33 @@ function Login({
       <footer className="fineprint">
         Not affiliated with Cursor, Anthropic, OpenAI, or Google.
       </footer>
+    </div>
+  );
+}
+
+function ThemeSwitcher({ value, onChange }: { value: ThemeId; onChange: (id: ThemeId) => void }) {
+  const labelId = useId();
+  return (
+    <div className="theme-switcher">
+      <span className="identity-label" id={labelId}>
+        Appearance
+      </span>
+      <div className="theme-picks" role="radiogroup" aria-labelledby={labelId}>
+        {THEMES.map((theme) => (
+          <button
+            key={theme.id}
+            type="button"
+            role="radio"
+            aria-checked={value === theme.id}
+            title={theme.note}
+            className={value === theme.id ? "active" : ""}
+            data-theme-choice={theme.id}
+            onClick={() => onChange(theme.id)}
+          >
+            {theme.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -22,7 +22,7 @@
     "build": "npm run build -w @codefriends/shared && npm run build -w @codefriends/core && npm run build -w @codefriends/server && npm run build -w @codefriends/popout && npm run compile -w codefriends && npm run typecheck -w @codefriends/worker",
     "smoke": "npm run smoke -w @codefriends/server",
     "demo:agents": "npm run demo:agents -w @codefriends/server",
-    "test:connect": "npm run test -w @codefriends/connect-client && npm run test -w codefriends",
+    "test:connect": "npm run test -w @codefriends/connect-client && npm run test -w codefriends && npm run test -w @codefriends/popout",
     "lint": "npm run build && npm run test:connect"
   },
   "devDependencies": {
