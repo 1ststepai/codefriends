@@ -153,6 +153,7 @@ textarea {
 }
 
 .shell.login {
+  width: min(420px, 100%);
   max-width: 420px;
   margin: 0 auto;
   padding: 28px var(--pad-x) var(--space-4);
@@ -169,7 +170,7 @@ textarea {
   justify-content: space-between;
   align-items: center;
   padding: var(--space-3) var(--pad-x) var(--space-2);
-  gap: var(--space-3);
+  gap: var(--space-2);
 }
 
 .top-brand {
@@ -177,11 +178,16 @@ textarea {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .top-brand h1 {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+}
+
+.top .ghost.quiet {
+  flex: none;
   white-space: nowrap;
 }
 
@@ -945,9 +951,10 @@ h1 {
 
 .google-signin {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: var(--space-2);
+  gap: 2px;
   text-decoration: none;
   font-weight: 600;
   padding: 10px var(--space-3);
@@ -1038,8 +1045,7 @@ a.google-signin:hover {
 }
 
 .shell.login .theme-switcher {
-  padding: var(--space-2) 0 0;
-  margin-top: auto;
+  padding: var(--space-1) 0 0;
 }
 
 .profile-pane .theme-switcher {
@@ -1237,9 +1243,15 @@ a.google-signin:hover {
   }
 
   .shell.login {
+    width: 100%;
     max-width: none;
     border-left: 0;
     border-right: 0;
+    padding-top: 24px;
+  }
+
+  .shell.login .theme-switcher {
+    margin-top: 0;
   }
 
   .mode-tabs button,

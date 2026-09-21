@@ -733,6 +733,7 @@ function Login({
           <span className="provider-state">{google ? availabilityLabel(google) : "loading"}</span>
         </button>
       )}
+      <ThemeSwitcher value={theme} onChange={onTheme} />
       {later.length ? (
         <details className="coming-later">
           <summary>Coming later</summary>
@@ -849,7 +850,6 @@ function Login({
           </button>
         </p>
       ) : null}
-      <ThemeSwitcher value={theme} onChange={onTheme} />
       <footer className="fineprint">
         Not affiliated with Cursor, Anthropic, OpenAI, or Google.
       </footer>
