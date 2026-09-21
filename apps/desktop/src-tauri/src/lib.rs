@@ -88,7 +88,8 @@ fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
 
-    let mut tray = TrayIconBuilder::new()
+    let tray = TrayIconBuilder::new()
+        .icon(tauri::include_image!("icons/tray.png"))
         .menu(&menu)
         .tooltip("CodeFriends")
         .show_menu_on_left_click(false)
@@ -109,10 +110,6 @@ fn create_tray(app: &AppHandle) -> tauri::Result<()> {
                 show_main(tray.app_handle());
             }
         });
-
-    if let Some(icon) = app.default_window_icon() {
-        tray = tray.icon(icon.clone());
-    }
 
     tray.build(app)?;
     Ok(())
