@@ -55,7 +55,7 @@ codefriends://open?dm=<user-id>
 
 The shell copies the query string onto the popout origin and focuses the window. OS registration is bundled for installed apps; `tauri dev` also calls `register_all` on Linux (and Windows debug) so unpackaged runs can claim the scheme. **macOS only registers on an installed `.app`.**
 
-To have the IDE badge open this app instead of a browser tab, set `codefriends.popoutUrl` (or `CODEFRIENDS_POPOUT_URL` in connect plugins) to `codefriends://open`. OAuth callbacks still use the HTTP popout URL.
+To have the IDE badge open this app instead of a browser tab, set `codefriends.popoutUrl` (or `CODEFRIENDS_POPOUT_URL` in **connect plugins**) to `codefriends://open`. The **server** `CODEFRIENDS_POPOUT_URL` must stay an http(s) URL (`https://codefriends.1ststep.ai` in production) so Google can redirect the browser after OAuth.
 
 ## Tray
 

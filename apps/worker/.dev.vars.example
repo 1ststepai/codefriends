@@ -1,4 +1,6 @@
 # Copy to apps/worker/.dev.vars for `wrangler dev`. Never commit the real file.
+# Production login is Google OIDC (GEMINI_GOOGLE_*). Callback URI must match the
+# Google Cloud Web client exactly. Server CODEFRIENDS_POPOUT_URL must be http(s).
 CODEFRIENDS_POPOUT_URL=http://127.0.0.1:5173
 CODEFRIENDS_PUBLIC_URL=http://127.0.0.1:8787
 CODEFRIENDS_DEV_LOGIN=1

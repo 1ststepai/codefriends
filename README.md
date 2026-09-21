@@ -69,14 +69,16 @@ Sessions are random 32-byte bearer tokens; only a SHA-256 hash is stored. There 
 
 ## Auth: provider-native identity
 
-CodeFriends users are **not** “Sign in with GitHub.” A person signs in with the account they already use in a coding tool. The same human can appear **once** in the friends graph after linking Cursor + Claude (or any pair) onto one CodeFriends user id.
+Production login is **Continue with Google** (Google OIDC). Provider id in the API stays `gemini`. Cursor / Claude / Codex still have no public third-party identity API, so the popout does not pretend those buttons work.
+
+The same human can appear **once** in the friends graph after linking a second provider onto one CodeFriends user id.
 
 ```
 identities (provider, subject)  ──►  users.id
-     cursor  /  claude  /  codex  /  gemini  /  dev
+     gemini  /  cursor  /  claude  /  codex  /  dev
 ```
 
-- **Login** with a provider identity finds that row, or creates a user.
+- **Login** with Google finds that identity row, or creates a user.
 - **Link** (already signed in, then complete another provider) attaches a second `(provider, subject)` to the same user.
 - Identities are never auto-merged by email. Linking is explicit.
 - GitHub is **not** a login provider. If it appears later, it would only be optional linking.
@@ -85,27 +87,51 @@ identities (provider, subject)  ──►  users.id
 
 | Provider | Product account | Status | What is actually possible |
 | --- | --- | --- | --- |
-| **Gemini** | Gemini via **Google account** | **Implemented** (Sign in with Google / OIDC + PKCE) | Public, registerable OAuth client. Button is `live` once env vars are set; otherwise `unconfigured`. |
+| **Google** | Google account (API id `gemini`) | **Implemented** (Sign in with Google / OIDC + PKCE) | Public, registerable OAuth Web client. Popout **Continue with Google** is `live` once env vars are set; otherwise `unconfigured`. This is how real users get in. |
 | **Cursor** | Cursor account | **Blocked** | No public “Sign in with Cursor” identity API. Cursor’s OAuth support is MCP-outbound (the IDE talking to *your* server), not Cursor account identity for a third-party app. |
 | **Claude** | Claude.ai / Anthropic | **Blocked** | No public third-party identity OAuth. Consumer OAuth tokens are reserved for Claude.ai / Claude Code; using them in other products violates Anthropic’s terms. |
 | **Codex** | ChatGPT / Codex | **Blocked** | “Sign in with ChatGPT” is a real identity product but **partner-only** (no self-serve app registration). Codex CLI OAuth is first-party — do not impersonate that client. |
-| **Dev username** | local demo | **Dev only** | `POST /api/auth/login { "username": "maya" }` — no password. On when `NODE_ENV` is not `production`, or `CODEFRIENDS_DEV_LOGIN=1`. |
+| **Dev username** | local demo | **Dev only** | `POST /api/auth/login { "username": "maya" }` — no password. On when `NODE_ENV` is not `production`, or `CODEFRIENDS_DEV_LOGIN=1`. Hidden in the popout unless availability is `dev`. |
 
-Each blocked provider still has a **typed adapter** (`start` / `complete` when an official program exists). `GET /api/auth/providers` returns the same catalog the popout renders — including `blockedReason` and `nextStep`.
+Each blocked provider still has a **typed adapter** (`start` / `complete` when an official program exists). `GET /api/auth/providers` returns the same catalog the popout renders — including `blockedReason` and `nextStep`. Blocked buttons are collapsed under **Coming later**.
 
 `CODEFRIENDS_MOCK_PROVIDERS=1` enables `POST /api/auth/:provider/mock { "subject": "…" }` so smoke tests and architecture demos can exercise linking **without pretending the official login works**.
 
-### Gemini / Google env (production-shaped login)
+### Production login: Google Cloud (OIDC)
 
-Gemini consumer identity **is** a Google account. Create a Google Cloud **Web** OAuth client and set:
+Gemini consumer identity **is** a Google account. Create one **Web application** OAuth client and set the env vars below. Do not commit the client secret.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) → select or create a project.
+2. **APIs & Services → OAuth consent screen**
+   - User type: **External**
+   - App name: `CodeFriends`
+   - User support email + developer contact: your address
+   - Scopes: the adapter requests `openid`, `email`, and `profile` (non-sensitive)
+   - If the consent screen stays in **Testing**, add every real user as a test user. Publishing the app is what lets arbitrary Google accounts sign in.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**
+   - Application type: **Web application**
+   - Name: `CodeFriends web`
+4. **Authorized JavaScript origins** (exact, no path, no trailing slash):
+   - `http://127.0.0.1:5173` (Vite popout)
+   - `http://localhost:5173`
+   - `http://127.0.0.1:8787` (Node serving the popout)
+   - `http://localhost:8787`
+   - `https://codefriends.1ststep.ai`
+5. **Authorized redirect URIs** (must match `GEMINI_GOOGLE_CALLBACK_URL` character-for-character):
+   - `http://127.0.0.1:8787/api/auth/gemini/callback`
+   - `http://localhost:8787/api/auth/gemini/callback` (Windows often uses `localhost`; Google treats it as different from `127.0.0.1`)
+   - `https://codefriends.1ststep.ai/api/auth/gemini/callback`
+6. Copy the client ID and client secret into env (never git).
 
 | Variable | Purpose |
 | --- | --- |
-| `GEMINI_GOOGLE_CLIENT_ID` | OAuth client id |
-| `GEMINI_GOOGLE_CLIENT_SECRET` | OAuth client secret |
-| `GEMINI_GOOGLE_CALLBACK_URL` | Must match the console redirect URI, default `http://127.0.0.1:8787/api/auth/gemini/callback` |
-| `CODEFRIENDS_PUBLIC_URL` | Server origin used to build callbacks if the Gemini callback env is omitted |
-| `CODEFRIENDS_POPOUT_URL` | Where the OAuth callback sends the browser (`?handoff=`) |
+| `GEMINI_GOOGLE_CLIENT_ID` | OAuth client id from the console |
+| `GEMINI_GOOGLE_CLIENT_SECRET` | OAuth client secret from the console |
+| `GEMINI_GOOGLE_CALLBACK_URL` | Must be one of the redirect URIs above. If omitted, defaults to `{CODEFRIENDS_PUBLIC_URL}/api/auth/gemini/callback` |
+| `CODEFRIENDS_PUBLIC_URL` | Public API origin. Production: `https://codefriends.1ststep.ai` |
+| `CODEFRIENDS_POPOUT_URL` | http(s) origin the OAuth **callback** sends the browser to (`?handoff=`). Production: `https://codefriends.1ststep.ai`. Must not be `codefriends://…` — that scheme is only for the IDE badge. |
+
+On a Windows self-host, popout and API share that HTTPS origin. Split Worker + Vercel: `CODEFRIENDS_PUBLIC_URL` / callback URI are the Worker origin; `CODEFRIENDS_POPOUT_URL` is the Vercel origin. See [docs/self-host-windows.md](./docs/self-host-windows.md) for the PC + tunnel path.
 
 Copy [`.env.example`](./.env.example) to `.env`. **Do not commit secrets.**
 
@@ -245,14 +271,14 @@ npm run test:connect
 
 ## Smoke test
 
-Proves two users can go online, exchange a 1:1 DM, **and that history is still there after a server restart**. Also exercises mock provider linking, **invite accept** (reusable token → friend edge), **status-text broadcast**, **profile share** (including socials), **school board**, **build library** (official shelf + community add), **help packet** (create + fetch, required sections), and serving the built popout. Starts an ephemeral server with a temp SQLite file.
+Proves two users can go online, exchange a 1:1 DM, **and that history is still there after a server restart**. Also exercises mock provider linking, **invite accept** (reusable token → friend edge), **status-text broadcast**, **profile share** (including socials), **school board**, **build library** (official shelf + community add), **help packet** (create + fetch, required sections), serving the built popout, **admin `/metrics` gated**, and **Google OAuth start/callback/handoff**. Starts an ephemeral server with a temp SQLite file.
 
 ```bash
 npm run smoke
 npm run test:connect
 ```
 
-Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served, admin metrics gated`
+Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, socials cleared, school board topic+reply, build library official+community, help packet create+fetch, popout static served, admin metrics gated, google oauth start/callback/handoff`
 
 `test:connect` prints the documented prompt paths (first run, Not now cooldown, Don’t ask again, already connected, host popout URLs).
 
@@ -266,7 +292,7 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 | `GET` | `/admin` | Admin dashboard (login form if no cookie). Alias: `/admin/monitor`. Node server only |
 | `GET` | `/api/auth/providers` | Catalog: live / unconfigured / blocked / dev / mock |
 | `POST` | `/api/auth/login` | Dev only. `{ username, displayName?, client? }` → `{ token, user }` |
-| `GET` | `/api/auth/gemini/start` | Google OIDC (needs env). `?link=1&token=` to attach to the current user |
+| `GET` | `/api/auth/gemini/start` | Google OIDC (needs env). User-visible name is **Continue with Google**. `?link=1&token=` to attach to the current user |
 | `GET` | `/api/auth/gemini/callback` | Exchanges the code, then redirects to the popout with `?handoff=` |
 | `GET` | `/api/auth/:provider/start` | Cursor / Claude / Codex return **501** with the blocked reason |
 | `POST` | `/api/auth/:provider/mock` | Only if `CODEFRIENDS_MOCK_PROVIDERS=1`. `{ subject }` |
@@ -311,7 +337,7 @@ Nothing in this repo is pre-hosted. You click through **Vercel** (popout) and **
 | Cloudflare → Workers → `codefriends-api` → Settings → Variables | Secrets / vars listed below | Auth + CORS + popout redirect |
 | [Vercel](https://vercel.com) → Add New Project | Import this Git repo, **Root Directory = repo root** | Builds `apps/popout` via `vercel.json` |
 | Vercel → Project → Settings → Environment Variables | `VITE_CODEFRIENDS_API_URL`, `VITE_CODEFRIENDS_WS_URL` | Baked into the static SPA at **build** time |
-| Google Cloud Console (optional) | Web OAuth client | Only if you want Gemini / Google login |
+| Google Cloud Console | Web OAuth client | **Required for real users.** Continue with Google is the production login |
 
 Chicken-and-egg: deploy the Worker first (you get `*.workers.dev`), then deploy the popout with that URL, then set `CODEFRIENDS_POPOUT_URL` on the Worker and redeploy it. Changing Vite env vars later requires a **Vercel Redeploy**.
 
@@ -347,7 +373,7 @@ Dashboard clicks after deploy:
 | `CODEFRIENDS_SEED` | `1` to keep the demo roster; `0` for an empty friends graph | no |
 | `CODEFRIENDS_MOCK_PROVIDERS` | `0` | no |
 | `CODEFRIENDS_DM_HISTORY_LIMIT` | `200` | no |
-| `GEMINI_GOOGLE_CLIENT_ID` / `SECRET` / `CALLBACK_URL` | only if using Google login; callback = `{CODEFRIENDS_PUBLIC_URL}/api/auth/gemini/callback` | secret for the client secret |
+| `GEMINI_GOOGLE_CLIENT_ID` / `SECRET` / `CALLBACK_URL` | production login; callback = `{CODEFRIENDS_PUBLIC_URL}/api/auth/gemini/callback` | secret for the client secret |
 
 `GET https://codefriends-api.<subdomain>.workers.dev/health` should return `{ "ok": true, "store": "d1", ... }`. That endpoint is **not** provisioned for you until you deploy.
 
@@ -368,12 +394,12 @@ Dashboard clicks after deploy:
 
 Alternative: **Cloudflare Pages** on `apps/popout/dist` with the same Vite env vars. `apps/popout/public/_redirects` is the SPA fallback.
 
-### 3. Google OAuth (optional, still $0)
+### 3. Google OAuth (production login, still $0)
 
-Google Cloud Console → APIs & Services → Credentials → Create OAuth client → **Web application**.
+Follow **[Production login: Google Cloud (OIDC)](#production-login-google-cloud-oidc)** above. For a Worker + Vercel split, add the Worker callback as well:
 
-- Authorized JavaScript origins: the Vercel origin.
-- Authorized redirect URI: `https://codefriends-api.<subdomain>.workers.dev/api/auth/gemini/callback` (must match `GEMINI_GOOGLE_CALLBACK_URL` exactly).
+- Authorized JavaScript origins: the Vercel origin and `https://codefriends.1ststep.ai` if you use that hostname.
+- Authorized redirect URI: `https://codefriends-api.<subdomain>.workers.dev/api/auth/gemini/callback` **or** `https://codefriends.1ststep.ai/api/auth/gemini/callback` when the Node server serves both API and popout. Must match `GEMINI_GOOGLE_CALLBACK_URL` exactly.
 
 ### 4. After it is up
 

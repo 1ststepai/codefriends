@@ -32,10 +32,10 @@ export const PROVIDER_COPY: Record<
       "Apply for / wait on official Sign in with ChatGPT partner access, then wire the OpenAI authorization-code + PKCE endpoints on the codex adapter. Do not scrape ~/.codex/auth.json or impersonate the Codex CLI client.",
   },
   gemini: {
-    label: "Gemini",
-    accountOf: "Gemini (Google account)",
+    label: "Google",
+    accountOf: "Google account",
     nextStep:
-      "Create a Google Cloud OAuth client (Web application), add the callback URL, and set GEMINI_GOOGLE_CLIENT_ID / GEMINI_GOOGLE_CLIENT_SECRET / GEMINI_GOOGLE_CALLBACK_URL.",
+      "Create a Google Cloud OAuth Web client, add the callback URI(s), and set GEMINI_GOOGLE_CLIENT_ID / GEMINI_GOOGLE_CLIENT_SECRET / GEMINI_GOOGLE_CALLBACK_URL (plus CODEFRIENDS_PUBLIC_URL and CODEFRIENDS_POPOUT_URL).",
   },
   dev: {
     label: "Dev username",
@@ -59,7 +59,7 @@ export function describeProviders(
   config: RuntimeConfig,
   adapters: Map<AuthProvider, AuthProviderAdapter>,
 ): AuthProviderInfo[] {
-  const ids: AuthProvider[] = ["cursor", "claude", "codex", "gemini", "dev"];
+  const ids: AuthProvider[] = ["gemini", "cursor", "claude", "codex", "dev"];
   return ids.map((id) => {
     const copy = PROVIDER_COPY[id];
     const adapter = adapters.get(id);

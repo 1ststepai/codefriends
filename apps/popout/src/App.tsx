@@ -622,9 +622,13 @@ function Login({
   const [busy, setBusy] = useState(false);
   const [mockSubject, setMockSubject] = useState("");
   const [mockProvider, setMockProvider] = useState(hinted && hinted !== "dev" && hinted !== "generic" ? hinted : "cursor");
+  const google = providers.find((p) => p.id === "gemini");
+  const later = providers.filter((p) => p.id !== "gemini" && p.id !== "dev");
   const productProviders = providers.filter((p) => p.id !== "dev");
   const dev = providers.find((p) => p.id === "dev");
-  const showDev = !providers.length || dev?.availability === "dev" || genericHost;
+  const showDev = dev?.availability === "dev";
+  const googleLive = google?.availability === "live" && Boolean(google.startPath);
+  const openedHost = hostOpenedFrom(hinted);
   const highlighted = productProviders.find((p) => p.id === hinted);
 
   return (
@@ -632,11 +636,10 @@ function Login({
       <div className="kicker">Learn together</div>
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
-        Learn with friends while you use Cursor, Claude, Codex, or Gemini. Presence, DMs, a short
-        profile (GitHub / tools / optional socials), a school board, a build library of 1stStep
-        starters plus projects the cohort shares, and a help packet you can copy to a friend's
-        AI chat. One CodeFriends user can link several of those identities so you stay a single
-        person in the room.
+        Learn with friends while you use Cursor, Claude, Codex, or Gemini. Sign in with Google to
+        join. Presence, DMs, a short profile (GitHub / tools / optional socials), a school board, a
+        build library of 1stStep starters plus projects the cohort shares, and a help packet you
+        can copy to a friend's AI chat.
       </p>
       {inviteFrom ? (
         <p className="lede highlight">
@@ -648,34 +651,54 @@ function Login({
         <p className="lede highlight">
           Opened from a local / open-source editor (VS Code, VSCodium, Continue, Ollama GUI, Open
           WebUI, SillyTavern, …). This is an opt-in to a <strong>CodeFriends</strong> identity — not
-          “login with Ollama” or any host SSO.
+          “login with Ollama” or any host SSO. Continue with Google to join.
         </p>
-      ) : highlighted ? (
+      ) : highlighted && highlighted.id !== "gemini" ? (
         <p className="lede highlight">
-          Opened from {highlighted.label}.{" "}
-          {highlighted.availability === "live"
-            ? `Continue with your ${highlighted.accountOf} account.`
-            : highlighted.availability === "unconfigured"
-              ? highlighted.nextStep ??
-                `Sign in with Google in this popout once GEMINI_GOOGLE_* env is set. That is CodeFriends Gemini identity, not ${highlighted.label} CLI login.`
-              : highlighted.blockedReason ?? "This provider’s official login is not publicly available yet."}
+          Opened from {openedHost ?? highlighted.label}.{" "}
+          {highlighted.blockedReason ?? "This provider’s official login is not publicly available yet."}
+          {googleLive ? " Continue with Google to get in — keep using that tool as usual." : ""}
+        </p>
+      ) : googleLive ? (
+        <p className="lede highlight">
+          {openedHost ? `Opened from ${openedHost}. ` : ""}
+          Continue with your Google account
+          {hinted === "gemini" ? ". That is CodeFriends sign-in, not Gemini CLI login." : "."}
+        </p>
+      ) : google?.availability === "unconfigured" ? (
+        <p className="lede highlight">
+          {google.nextStep ??
+            "Sign in with Google once GEMINI_GOOGLE_* env is set. That is CodeFriends identity, not Gemini CLI login."}
         </p>
       ) : null}
-      <div className="provider-grid">
-        {productProviders.map((provider) => (
-          <ProviderButton
-            key={provider.id}
-            provider={provider}
-            emphasized={provider.id === hinted}
-            disabled={busy}
-            onStart={() => {
-              if (provider.startPath) {
-                window.location.href = `${apiUrl(provider.startPath)}?client=${encodeURIComponent(clientHint() ?? provider.id)}`;
-              }
-            }}
-          />
-        ))}
-      </div>
+      {google?.availability === "live" && google.startPath ? (
+        <a className="primary google-signin" href={oauthStartHref(google.startPath, { client: clientHint() ?? "web" })}>
+          Continue with Google
+        </a>
+      ) : (
+        <button type="button" className="primary google-signin" disabled>
+          Continue with Google
+          <span className="provider-state">{google ? availabilityLabel(google) : "loading"}</span>
+        </button>
+      )}
+      {later.length ? (
+        <details className="coming-later">
+          <summary>Coming later</summary>
+          <ul>
+            {later.map((provider) => (
+              <li key={provider.id}>
+                <strong>{provider.label}</strong>
+                <p>
+                  {provider.blockedReason ??
+                    (provider.availability === "mock"
+                      ? "Mock identity only — there is no public third-party login API yet."
+                      : "Not available yet")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
       {showDev ? (
         <form
           onSubmit={async (e) => {
@@ -771,38 +794,6 @@ function Login({
         Not affiliated with Cursor, Anthropic, OpenAI, or Google.
       </footer>
     </div>
-  );
-}
-
-function ProviderButton({
-  provider,
-  emphasized,
-  disabled,
-  onStart,
-}: {
-  provider: AuthProviderInfo;
-  emphasized?: boolean;
-  disabled?: boolean;
-  onStart: () => void;
-}) {
-  const canStart = provider.availability === "live" && Boolean(provider.startPath);
-  const title =
-    provider.availability === "live"
-      ? `Sign in with ${provider.label}`
-      : provider.availability === "unconfigured"
-        ? provider.nextStep ?? "Needs OAuth client env vars"
-        : provider.blockedReason ?? "Not available yet";
-  return (
-    <button
-      type="button"
-      className={`provider ${provider.id} ${emphasized ? "emphasized" : ""}`}
-      disabled={disabled || !canStart}
-      title={title}
-      onClick={onStart}
-    >
-      Continue with {provider.label}
-      <span className="provider-state">{availabilityLabel(provider)}</span>
-    </button>
   );
 }
 
@@ -1169,7 +1160,7 @@ function LinkedAccounts({
       <span className="identity-list">
         {(self.identities ?? []).map((id) => (
           <span key={id.provider} className={`badge ${id.provider === "dev" ? "web" : id.provider}`}>
-            {id.provider}
+            {providers.find((p) => p.id === id.provider)?.label ?? id.provider}
           </span>
         ))}
       </span>
@@ -1180,7 +1171,7 @@ function LinkedAccounts({
             <a
               key={provider.id}
               className="link-account"
-              href={`${apiUrl(provider.startPath)}?link=1&token=${encodeURIComponent(token)}&client=${encodeURIComponent(self.client)}`}
+              href={oauthStartHref(provider.startPath, { link: "1", token, client: self.client })}
             >
               Link {provider.label}
             </a>
@@ -2020,6 +2011,20 @@ function stripAuthQuery(): void {
 
 function providerHint(): string | undefined {
   return new URLSearchParams(window.location.search).get("provider") ?? undefined;
+}
+
+function hostOpenedFrom(hinted: string | undefined): string | undefined {
+  if (!hinted || hinted === "dev") return undefined;
+  if (hinted === "generic") return "a local editor";
+  return hinted in CLIENT_LABEL ? CLIENT_LABEL[hinted as ClientKind] : hinted;
+}
+
+function oauthStartHref(startPath: string, query: Record<string, string>): string {
+  const url = new URL(apiUrl(startPath), window.location.origin);
+  for (const [key, value] of Object.entries(query)) {
+    if (value) url.searchParams.set(key, value);
+  }
+  return url.toString();
 }
 
 function clientHint(): string | undefined {

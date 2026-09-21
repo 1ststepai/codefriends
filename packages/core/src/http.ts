@@ -58,10 +58,12 @@ export function allowedCorsOrigin(request: Request, config: RuntimeConfig): stri
     ...DESKTOP_SHELL_ORIGINS,
     ...config.corsOrigins,
   ]);
-  try {
-    allowed.add(new URL(config.popoutUrl).origin);
-  } catch {
-    /* ignore invalid popout URL */
+  for (const raw of [config.popoutUrl, config.publicUrl]) {
+    try {
+      allowed.add(new URL(raw).origin);
+    } catch {
+      /* ignore invalid URL */
+    }
   }
   if (allowed.has(origin)) return origin;
   if (origin.endsWith(".vercel.app") || origin.endsWith(".pages.dev")) return origin;
@@ -543,12 +545,30 @@ function mockProfile(provider: AuthProvider, body: Record<string, unknown>): Pro
 }
 
 function callbackUrl(config: RuntimeConfig, provider: AuthProvider, adapter: AuthProviderAdapter): string {
-  if (provider === "gemini") return config.google.callbackUrl;
+  if (provider === "gemini") {
+    return config.google.callbackUrl.trim() || `${config.publicUrl}/api/auth/${adapter.id}/callback`;
+  }
   return `${config.publicUrl}/api/auth/${adapter.id}/callback`;
 }
 
-function popoutRedirect(config: RuntimeConfig, query: Record<string, string | undefined>): string {
-  const url = new URL(config.popoutUrl);
+function httpUrl(raw: string): URL | undefined {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "http:" || url.protocol === "https:") return url;
+  } catch {
+    /* invalid or custom-scheme */
+  }
+  return undefined;
+}
+
+/** Browser return URL after OAuth. Custom schemes (codefriends://) cannot complete Google's redirect. */
+export function popoutRedirect(config: RuntimeConfig, query: Record<string, string | undefined>): string {
+  const url = httpUrl(config.popoutUrl) ?? httpUrl(config.publicUrl);
+  if (!url) {
+    throw new Error(
+      "CODEFRIENDS_POPOUT_URL must be an http(s) URL so Google can send the browser back after sign-in",
+    );
+  }
   for (const [key, value] of Object.entries(query)) {
     if (value) url.searchParams.set(key, value);
   }
