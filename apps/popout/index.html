@@ -9,6 +9,14 @@
     <link rel="icon" href="/brand/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png" />
     <title>CodeFriends</title>
+    <script>
+      try {
+        var t = localStorage.getItem("codefriends.theme");
+        if (t === "midnight" || t === "daylight" || t === "lamp" || t === "contrast") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
