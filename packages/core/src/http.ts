@@ -243,6 +243,10 @@ async function route(request: Request, ctx: HttpContext): Promise<Response> {
         facebookUrl: optional(body.facebookUrl),
         telegramUrl: optional(body.telegramUrl),
         whatsappUrl: optional(body.whatsappUrl),
+        currentlyBuilding: optional(body.currentlyBuilding),
+        ownsBusiness: body.ownsBusiness,
+        businessNote: optional(body.businessNote),
+        wantsToHelpOthersBuild: body.wantsToHelpOthersBuild,
         tools: body.tools,
       });
       await broadcastPresence(store, updated.id);

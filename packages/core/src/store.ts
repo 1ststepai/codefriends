@@ -42,6 +42,10 @@ export interface UserRecord {
   facebookUrl: string;
   telegramUrl: string;
   whatsappUrl: string;
+  currentlyBuilding: string;
+  ownsBusiness: boolean;
+  businessNote: string;
+  wantsToHelpOthersBuild: boolean;
   createdAt: number;
 }
 
@@ -60,6 +64,10 @@ interface UserRow {
   facebook_url?: string;
   telegram_url?: string;
   whatsapp_url?: string;
+  currently_building?: string;
+  owns_business?: number;
+  business_note?: string;
+  wants_to_help_others_build?: number;
   created_at: number;
 }
 
@@ -100,6 +108,10 @@ export class Store {
       facebookUrl: "",
       telegramUrl: "",
       whatsappUrl: "",
+      currentlyBuilding: "",
+      ownsBusiness: false,
+      businessNote: "",
+      wantsToHelpOthersBuild: false,
       createdAt: Date.now(),
     };
     await this.db
@@ -307,6 +319,10 @@ export class Store {
       facebookUrl?: string;
       telegramUrl?: string;
       whatsappUrl?: string;
+      currentlyBuilding?: string;
+      ownsBusiness?: unknown;
+      businessNote?: string;
+      wantsToHelpOthersBuild?: unknown;
     },
   ): Promise<UserRecord> {
     const user = await this.getUser(userId);
@@ -317,10 +333,16 @@ export class Store {
     if (patch.facebookUrl !== undefined) user.facebookUrl = cleanSocialUrl(patch.facebookUrl, "facebook");
     if (patch.telegramUrl !== undefined) user.telegramUrl = cleanSocialUrl(patch.telegramUrl, "telegram");
     if (patch.whatsappUrl !== undefined) user.whatsappUrl = cleanSocialUrl(patch.whatsappUrl, "whatsapp");
+    if (patch.currentlyBuilding !== undefined) user.currentlyBuilding = cleanNote(patch.currentlyBuilding);
+    if (patch.ownsBusiness !== undefined) user.ownsBusiness = asBool(patch.ownsBusiness);
+    if (patch.businessNote !== undefined) user.businessNote = cleanNote(patch.businessNote);
+    if (patch.wantsToHelpOthersBuild !== undefined) {
+      user.wantsToHelpOthersBuild = asBool(patch.wantsToHelpOthersBuild);
+    }
     if (patch.tools !== undefined) user.tools = parseTools(patch.tools).join(", ");
     await this.db
       .prepare(
-        `UPDATE users SET github_url = ?, website = ?, tools = ?, twitter_url = ?, facebook_url = ?, telegram_url = ?, whatsapp_url = ? WHERE id = ?`,
+        `UPDATE users SET github_url = ?, website = ?, tools = ?, twitter_url = ?, facebook_url = ?, telegram_url = ?, whatsapp_url = ?, currently_building = ?, owns_business = ?, business_note = ?, wants_to_help_others_build = ? WHERE id = ?`,
       )
       .run(
         user.githubUrl,
@@ -330,6 +352,10 @@ export class Store {
         user.facebookUrl,
         user.telegramUrl,
         user.whatsappUrl,
+        user.currentlyBuilding,
+        user.ownsBusiness ? 1 : 0,
+        user.businessNote,
+        user.wantsToHelpOthersBuild ? 1 : 0,
         user.id,
       );
     return user;
@@ -371,6 +397,10 @@ export class Store {
       facebookUrl: user.facebookUrl,
       telegramUrl: user.telegramUrl,
       whatsappUrl: user.whatsappUrl,
+      currentlyBuilding: user.currentlyBuilding,
+      ownsBusiness: user.ownsBusiness,
+      businessNote: user.businessNote,
+      wantsToHelpOthersBuild: user.wantsToHelpOthersBuild,
       identities: opts?.identities ? await this.identitiesOf(user.id) : undefined,
     };
   }
@@ -767,8 +797,20 @@ function rowToUser(row: UserRow): UserRecord {
     facebookUrl: row.facebook_url ?? "",
     telegramUrl: row.telegram_url ?? "",
     whatsappUrl: row.whatsapp_url ?? "",
+    currentlyBuilding: row.currently_building ?? "",
+    ownsBusiness: Boolean(row.owns_business),
+    businessNote: row.business_note ?? "",
+    wantsToHelpOthersBuild: Boolean(row.wants_to_help_others_build),
     createdAt: row.created_at,
   };
+}
+
+function cleanNote(raw: string): string {
+  return raw.trim().slice(0, STATUS_TEXT_MAX);
+}
+
+function asBool(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "true";
 }
 
 function usernameHint(profile: ProviderProfile): string {

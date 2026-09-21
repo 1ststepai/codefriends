@@ -460,6 +460,18 @@ h1 {
   margin-top: 8px;
 }
 
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.check-label input {
+  margin: 0;
+}
+
 .profile-bits {
   display: flex;
   flex-wrap: wrap;

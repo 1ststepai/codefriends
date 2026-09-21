@@ -45,6 +45,10 @@ export interface PublicUser {
   facebookUrl: string;
   telegramUrl: string;
   whatsappUrl: string;
+  currentlyBuilding: string;
+  ownsBusiness: boolean;
+  businessNote: string;
+  wantsToHelpOthersBuild: boolean;
   identities?: LinkedIdentity[];
 }
 

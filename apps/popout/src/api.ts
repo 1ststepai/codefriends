@@ -98,6 +98,10 @@ export async function updateProfile(
     facebookUrl?: string;
     telegramUrl?: string;
     whatsappUrl?: string;
+    currentlyBuilding?: string;
+    ownsBusiness?: boolean;
+    businessNote?: string;
+    wantsToHelpOthersBuild?: boolean;
   },
 ) {
   const res = await fetch(apiUrl("/api/me/profile"), {

@@ -350,6 +350,10 @@ async function inviteAndStatus(dbPath: string) {
         facebookUrl: string;
         telegramUrl: string;
         whatsappUrl: string;
+        currentlyBuilding: string;
+        ownsBusiness: boolean;
+        businessNote: string;
+        wantsToHelpOthersBuild: boolean;
       };
     }>(
       await fetch(`${server.url}/api/me/profile`, {
@@ -366,6 +370,10 @@ async function inviteAndStatus(dbPath: string) {
           facebookUrl: "https://facebook.com/kit.codes",
           telegramUrl: "kitcodes",
           whatsappUrl: "+1 555 123 4567",
+          currentlyBuilding: "a pairing lesson",
+          ownsBusiness: true,
+          businessNote: "weekend study club",
+          wantsToHelpOthersBuild: true,
         }),
       }),
       "update profile",
@@ -376,6 +384,10 @@ async function inviteAndStatus(dbPath: string) {
     assert.match(profile.user.facebookUrl, /facebook\.com\/kit\.codes/);
     assert.equal(profile.user.telegramUrl, "https://t.me/kitcodes");
     assert.equal(profile.user.whatsappUrl, "https://wa.me/15551234567");
+    assert.equal(profile.user.currentlyBuilding, "a pairing lesson");
+    assert.equal(profile.user.ownsBusiness, true);
+    assert.equal(profile.user.businessNote, "weekend study club");
+    assert.equal(profile.user.wantsToHelpOthersBuild, true);
 
     const fetched = await json<{
       user: {
@@ -383,6 +395,9 @@ async function inviteAndStatus(dbPath: string) {
         facebookUrl: string;
         telegramUrl: string;
         whatsappUrl: string;
+        currentlyBuilding: string;
+        ownsBusiness: boolean;
+        wantsToHelpOthersBuild: boolean;
       };
     }>(
       await fetch(`${server.url}/api/me`, {
@@ -393,22 +408,38 @@ async function inviteAndStatus(dbPath: string) {
     assert.equal(fetched.user.twitterUrl, "https://x.com/kitcodes");
     assert.equal(fetched.user.telegramUrl, "https://t.me/kitcodes");
     assert.equal(fetched.user.whatsappUrl, "https://wa.me/15551234567");
+    assert.equal(fetched.user.currentlyBuilding, "a pairing lesson");
+    assert.equal(fetched.user.ownsBusiness, true);
+    assert.equal(fetched.user.wantsToHelpOthersBuild, true);
 
-    const cleared = await json<{ user: { telegramUrl: string; twitterUrl: string } }>(
+    const cleared = await json<{
+      user: {
+        telegramUrl: string;
+        twitterUrl: string;
+        currentlyBuilding: string;
+        wantsToHelpOthersBuild: boolean;
+        ownsBusiness: boolean;
+      };
+    }>(
       await fetch(`${server.url}/api/me/profile`, {
         method: "POST",
         headers: {
           authorization: `Bearer ${kit.token}`,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ telegramUrl: "" }),
+        body: JSON.stringify({ telegramUrl: "", currentlyBuilding: "", wantsToHelpOthersBuild: false }),
       }),
       "clear telegram",
     );
     assert.equal(cleared.user.telegramUrl, "");
     assert.equal(cleared.user.twitterUrl, "https://x.com/kitcodes");
+    assert.equal(cleared.user.currentlyBuilding, "");
+    assert.equal(cleared.user.wantsToHelpOthersBuild, false);
+    assert.equal(cleared.user.ownsBusiness, true);
 
-    const afterClear = await json<{ user: { telegramUrl: string; twitterUrl: string } }>(
+    const afterClear = await json<{
+      user: { telegramUrl: string; twitterUrl: string; currentlyBuilding: string; ownsBusiness: boolean };
+    }>(
       await fetch(`${server.url}/api/me`, {
         headers: { authorization: `Bearer ${kit.token}` },
       }),
@@ -416,6 +447,8 @@ async function inviteAndStatus(dbPath: string) {
     );
     assert.equal(afterClear.user.telegramUrl, "");
     assert.equal(afterClear.user.twitterUrl, "https://x.com/kitcodes");
+    assert.equal(afterClear.user.currentlyBuilding, "");
+    assert.equal(afterClear.user.ownsBusiness, true);
 
     const profilePush = await waitForMatch(b, (msg) => {
       return (

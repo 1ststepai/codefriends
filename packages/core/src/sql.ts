@@ -170,4 +170,13 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       ALTER TABLE users ADD COLUMN whatsapp_url TEXT NOT NULL DEFAULT '';
     `,
   },
+  {
+    name: "007_builder_profile",
+    sql: `
+      ALTER TABLE users ADD COLUMN currently_building TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN owns_business INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE users ADD COLUMN business_note TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN wants_to_help_others_build INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];

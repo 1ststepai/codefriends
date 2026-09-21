@@ -759,10 +759,18 @@ function ProfileEditor({
 }) {
   const [urls, setUrls] = useState(() => profileUrlState(self));
   const [tools, setTools] = useState((self.tools ?? []).join(", "));
+  const [currentlyBuilding, setCurrentlyBuilding] = useState(self.currentlyBuilding ?? "");
+  const [ownsBusiness, setOwnsBusiness] = useState(Boolean(self.ownsBusiness));
+  const [businessNote, setBusinessNote] = useState(self.businessNote ?? "");
+  const [wantsToHelp, setWantsToHelp] = useState(Boolean(self.wantsToHelpOthersBuild));
 
   useEffect(() => {
     setUrls(profileUrlState(self));
     setTools((self.tools ?? []).join(", "));
+    setCurrentlyBuilding(self.currentlyBuilding ?? "");
+    setOwnsBusiness(Boolean(self.ownsBusiness));
+    setBusinessNote(self.businessNote ?? "");
+    setWantsToHelp(Boolean(self.wantsToHelpOthersBuild));
   }, [
     self.githubUrl,
     self.website,
@@ -771,6 +779,10 @@ function ProfileEditor({
     self.telegramUrl,
     self.whatsappUrl,
     self.tools,
+    self.currentlyBuilding,
+    self.ownsBusiness,
+    self.businessNote,
+    self.wantsToHelpOthersBuild,
   ]);
 
   const save = async (patch: Parameters<typeof updateProfile>[1]) => {
@@ -810,6 +822,58 @@ function ProfileEditor({
           }}
         />
       </label>
+      <label className="status-label">
+        What are you currently building?
+        <input
+          className="status-input"
+          value={currentlyBuilding}
+          maxLength={STATUS_TEXT_MAX}
+          placeholder="a lesson, a CLI, pairing notes…"
+          onChange={(e) => setCurrentlyBuilding(e.target.value)}
+          onBlur={() => {
+            if (currentlyBuilding !== (self.currentlyBuilding ?? "")) void save({ currentlyBuilding });
+          }}
+        />
+      </label>
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={ownsBusiness}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setOwnsBusiness(next);
+            void save({ ownsBusiness: next });
+          }}
+        />
+        Do you own a business?
+      </label>
+      {ownsBusiness ? (
+        <label className="status-label">
+          Business (one line)
+          <input
+            className="status-input"
+            value={businessNote}
+            maxLength={STATUS_TEXT_MAX}
+            placeholder="a weekend study club, a tiny tool…"
+            onChange={(e) => setBusinessNote(e.target.value)}
+            onBlur={() => {
+              if (businessNote !== (self.businessNote ?? "")) void save({ businessNote });
+            }}
+          />
+        </label>
+      ) : null}
+      <label className="check-label">
+        <input
+          type="checkbox"
+          checked={wantsToHelp}
+          onChange={(e) => {
+            const next = e.target.checked;
+            setWantsToHelp(next);
+            void save({ wantsToHelpOthersBuild: next });
+          }}
+        />
+        Want to help others with building?
+      </label>
     </div>
   );
 }
@@ -821,10 +885,20 @@ function ProfileBits({ user, links }: { user: PublicUser; links: boolean }) {
     label: field.key === "website" ? "Site" : field.key === "twitterUrl" ? "Twitter/X" : field.label,
     href: user[field.key],
   }));
-  if (!chips.length && tools.length === 0) return null;
+  const signals = [
+    user.currentlyBuilding ? user.currentlyBuilding : "",
+    user.ownsBusiness ? (user.businessNote ? `Owns a business · ${user.businessNote}` : "Owns a business") : "",
+    user.wantsToHelpOthersBuild ? "Happy to help others build" : "",
+  ].filter(Boolean);
+  if (!chips.length && !signals.length && tools.length === 0) return null;
   return (
     <span className="profile-bits">
       {tools.length ? <span className="tools">{tools.join(" · ")}</span> : null}
+      {signals.map((signal) => (
+        <span key={signal} className="tools">
+          {signal}
+        </span>
+      ))}
       {chips.map((chip) =>
         links ? (
           <a key={chip.key} href={chip.href} target="_blank" rel="noreferrer">
