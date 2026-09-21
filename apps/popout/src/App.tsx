@@ -349,6 +349,7 @@ export function App() {
   if (bootstrapping) {
     return (
       <div className="shell login">
+        <img className="brand-lockup" src="/brand/logo-lockup.png" alt="codefriends.1ststep.ai" />
         <div className="kicker">CodeFriends</div>
         <h1>Opening your session…</h1>
       </div>
@@ -376,7 +377,10 @@ export function App() {
   return (
     <div className={`shell view-${view}`}>
       <header className="top">
-        <h1>CodeFriends</h1>
+        <div className="top-brand">
+          <img className="brand-icon" src="/brand/icon.png" alt="" />
+          <h1>CodeFriends</h1>
+        </div>
         <button
           className="ghost quiet"
           type="button"
@@ -658,6 +662,7 @@ function Login({
 
   return (
     <div className="shell login">
+      <img className="brand-lockup" src="/brand/logo-lockup.png" alt="codefriends.1ststep.ai" />
       <div className="kicker">Learn together</div>
       <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">

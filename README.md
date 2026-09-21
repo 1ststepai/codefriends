@@ -1,5 +1,9 @@
 # CodeFriends
 
+<p align="center">
+  <img src="apps/popout/public/brand/logo-lockup.png" alt="codefriends.1ststep.ai — People + AI + Progress" width="560" />
+</p>
+
 An **AI coding school with your friends in the room** — **Cursor / Claude / Codex / Gemini**.
 
 Presence, 1:1 DMs, invite links, a short profile (GitHub / tools / optional socials), a **school board** (tiny forum), and a **build library** (1stStep starters + cohort shares + a portable **help packet**) live in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM. Prompt/knowledge base and learning paths are next — this is not a Discord-for-devs headline.
