@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "CodeFriends",
+  "version": "0.1.0",
+  "identifier": "ai.codefriends.desktop",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://127.0.0.1:5173",
+    "beforeBuildCommand": "npm --prefix ../.. run build -w @codefriends/popout",
+    "frontendDist": "../../popout/dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "macOSPrivateApi": false,
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "CodeFriends",
+        "width": 440,
+        "height": 780,
+        "minWidth": 360,
+        "minHeight": 520,
+        "resizable": true,
+        "visible": true,
+        "decorations": true,
+        "backgroundColor": "#1e1e1e",
+        "create": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "nsis", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "category": "SocialNetworking",
+    "shortDescription": "Friends in the room while you code",
+    "longDescription": "Dedicated CodeFriends desktop window for presence and 1:1 DMs. Chat stays outside the IDE."
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["codefriends"]
+      }
+    }
+  }
+}

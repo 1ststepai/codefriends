@@ -41,7 +41,7 @@
         "codefriends.popoutUrl": {
           "type": "string",
           "default": "http://127.0.0.1:5173",
-          "description": "URL of the lightweight CodeFriends popout (PWA / browser window). The extension does not embed chat."
+          "description": "URL of the lightweight CodeFriends popout (PWA / browser window), or codefriends://open to hand off to the desktop app. The extension does not embed chat."
         },
         "codefriends.serverUrl": {
           "type": "string",

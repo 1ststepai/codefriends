@@ -8,3 +8,9 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+interface Window {
+  /** Injected by the Tauri desktop shell for packaged builds. */
+  __CODEFRIENDS_API_URL__?: string;
+  __CODEFRIENDS_WS_URL__?: string;
+}

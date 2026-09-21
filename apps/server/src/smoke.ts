@@ -735,6 +735,9 @@ async function servePopout(dbPath: string) {
     );
     assert.equal(health.ok, true);
     assert.equal(health.store, "sqlite");
+
+    const desktop = await fetch(`${server.url}/health`, { headers: { Origin: "tauri://localhost" } });
+    assert.equal(desktop.headers.get("access-control-allow-origin"), "tauri://localhost");
   } finally {
     await server.close();
   }
