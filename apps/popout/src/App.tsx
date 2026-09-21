@@ -662,7 +662,8 @@ function Login({
       ) : googleLive ? (
         <p className="lede highlight">
           {openedHost ? `Opened from ${openedHost}. ` : ""}
-          Continue with your Google account. That is CodeFriends sign-in, not Gemini CLI login.
+          Continue with your Google account
+          {hinted === "gemini" ? ". That is CodeFriends sign-in, not Gemini CLI login." : "."}
         </p>
       ) : google?.availability === "unconfigured" ? (
         <p className="lede highlight">
