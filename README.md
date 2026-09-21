@@ -11,18 +11,23 @@ Presence, 1:1 DMs, invite links, a short profile (GitHub / tools / optional soci
 ```
 IDE (thin)                         Outside the IDE
 ┌─────────────────────┐            ┌──────────────────────────┐
-│ Cursor / VS Code    │  open URL  │ apps/popout (Vite/React) │
-│ status bar:         │ ─────────► │ friends + DMs + board + library │
-│ CodeFriends · N     │  handoff   │ static SPA / PWA         │
-└─────────┬───────────┘            └────────────┬─────────────┘
-          │ GET /api/presence                   │ HTTP + WebSocket
+│ Cursor / VS Code    │  open URL  │ apps/desktop (Tauri 2)   │
+│ status bar:         │  or        │ native window + tray     │
+│ CodeFriends · N     │  deep link │ wrapping apps/popout     │
+└─────────┬───────────┘ ─────────► │ friends + DMs + board + library │
+          │ GET /api/presence      └────────────┬─────────────┘
           └──────────────► API (D1 + hub) ◄─────┘
                            Cloudflare Worker  (prod, $0)
                            or apps/server     (local / Node fallback)
+
+Browser / PWA popout remains the fallback if you do not install the desktop app.
 ```
+
+The daily-driver UX lives in a **dedicated desktop window**. The IDE stays a thin badge. See [docs/DESKTOP-UX-BRIEF.md](./docs/DESKTOP-UX-BRIEF.md).
 
 | Path | Role |
 | --- | --- |
+| `apps/desktop` | **Tauri 2** native window + tray wrapping `apps/popout`. Not Electron (lighter WebView; see that package README). |
 | `apps/popout` | Full dark UI. Static build; production target is **Vercel** (or Cloudflare Pages), or served from `apps/server` |
 | `apps/worker` | **$0 production API**: Cloudflare Workers + D1 + Durable Object presence hub |
 | `apps/server` | Local Node + `better-sqlite3` (smoke / `npm run dev`). Serves built `apps/popout/dist` when `index.html` is present. Optional Fly/Render + Turso fallback |
@@ -126,7 +131,31 @@ npm run dev
 - Popout UI: <http://127.0.0.1:5173> (proxies `/api` and `/ws` to the server)
 - SQLite file: `apps/server/data/codefriends.sqlite`
 
-Open the popout in two browser profiles (or a window + a private window). Sign in as `maya` in one and `parker` in the other. Click a friend to DM. Presence and messages are live. Restart the server: the same users and DMs are still there.
+### Desktop app (native window + tray)
+
+Needs the same `npm run dev` stack (the WebView loads the Vite popout). **Rust 1.88+** (1.98 used here) plus WebKitGTK (Linux) / WebView2 (Windows) / WKWebView (macOS) for the shell. `rustup default stable` is enough if your toolchain is older than 1.88.
+
+```bash
+# terminal 1
+npm run dev
+
+# terminal 2
+npm run desktop
+```
+
+Or one shot:
+
+```bash
+npm run dev:desktop
+```
+
+That opens a CodeFriends window (not a browser tab) and a tray / menu-bar icon: **Open**, **Available**, **Away**, **Quit**. Closing the window hides to the tray.
+
+Deep link stub: `codefriends://open?dm=…` / `?handoff=…` (Linux `tauri dev` registers the scheme at runtime; installed packages register it on Windows/Linux; macOS needs an installed `.app`). Point the IDE badge at `codefriends://open` to hand off here instead of Chrome. Details: [apps/desktop/README.md](./apps/desktop/README.md).
+
+`npm run desktop:build` packages a `.deb` (Linux) after building `apps/popout/dist`. macOS `.dmg` and Windows NSIS need a smoke on those machines.
+
+Open the popout in two browser profiles (or a window + a private window), or the desktop app plus a private browser window. Sign in as `maya` in one and `parker` in the other. Click a friend to DM. Presence and messages are live. Restart the server: the same users and DMs are still there.
 
 To add someone who is not already on the seed roster: **Create invite link** in the popout, copy it, and open it while signed in as the other person (or paste the code). Accepting makes you friends immediately. Set **Now working on** — friends see that status text under your name.
 
@@ -371,6 +400,7 @@ Use only if you already have Fly or Render free allowance. Both often **ask for 
 
 ## Next
 
+- Desktop visual refresh (rail + thread, invite card, native DM notifications) — shell is in `apps/desktop`; see the UX brief
 - Prompt / knowledge base and learning paths (education-first next slice)
 - Friends-only school-board toggle (v0 is instance-wide for signed-in users)
 - Official Cursor / Claude / Codex identity programs → fill in the existing adapters

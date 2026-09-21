@@ -290,6 +290,22 @@ export function App() {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
   };
 
+  useEffect(() => {
+    const onDesktop = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ status?: PresenceStatus; dm?: string }>).detail;
+      if (!detail) return;
+      if (detail.status === "available" || detail.status === "away" || detail.status === "offline") {
+        send({ type: "presence", status: detail.status });
+      }
+      if (typeof detail.dm === "string" && detail.dm) {
+        setActiveId(detail.dm);
+        setView("friends");
+      }
+    };
+    window.addEventListener("codefriends:desktop", onDesktop);
+    return () => window.removeEventListener("codefriends:desktop", onDesktop);
+  }, [token]);
+
   const agents = friends.filter((f) => f.online && AGENT_CLIENTS.has(f.client));
   const people = friends.filter((f) => !(f.online && AGENT_CLIENTS.has(f.client)));
   const filteredAgents = filterPeople(agents, query);

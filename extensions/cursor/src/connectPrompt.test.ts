@@ -36,6 +36,17 @@ test("extension Connect opens provider=cursor URL and does not claim Cursor SSO"
   assert.match(connectPromptMessage("cursor"), /not Cursor’s own account login screen/);
 });
 
+test("extension can hand off to the desktop shell via codefriends://", () => {
+  const url = buildPopoutUrl({
+    popoutUrl: "codefriends://open",
+    provider: "cursor",
+    handoff: "abc",
+  });
+  assert.match(url, /^codefriends:\/\/open/);
+  assert.match(url, /provider=cursor/);
+  assert.match(url, /handoff=abc/);
+});
+
 test("extension auto provider: Cursor vs VSCodium", () => {
   assert.equal(resolveIdeProvider("Cursor", "auto"), "cursor");
   assert.equal(resolveIdeProvider("VSCodium", "auto"), "generic");

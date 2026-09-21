@@ -28,6 +28,17 @@ export async function handleHttp(request: Request, ctx: HttpContext): Promise<Re
   }
 }
 
+/** Origins used by the Tauri 2 desktop WebView (custom protocol / localhost asset). */
+const DESKTOP_SHELL_ORIGINS = [
+  "tauri://localhost",
+  "https://tauri.localhost",
+  "http://tauri.localhost",
+  "https://asset.localhost",
+  "http://asset.localhost",
+  "https://ipc.localhost",
+  "http://ipc.localhost",
+] as const;
+
 export function allowedCorsOrigin(request: Request, config: RuntimeConfig): string {
   const origin = request.headers.get("Origin");
   if (!origin) return "*";
@@ -36,6 +47,7 @@ export function allowedCorsOrigin(request: Request, config: RuntimeConfig): stri
     "http://localhost:5173",
     "http://127.0.0.1:4173",
     "http://localhost:4173",
+    ...DESKTOP_SHELL_ORIGINS,
     ...config.corsOrigins,
   ]);
   try {

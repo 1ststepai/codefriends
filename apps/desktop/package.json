@@ -1,0 +1,17 @@
+{
+  "name": "@codefriends/desktop",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Native CodeFriends window + tray wrapping apps/popout (Tauri 2).",
+  "scripts": {
+    "dev": "node scripts/wait-for-popout.mjs && tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri",
+    "icon": "tauri icon ../popout/public/favicon.svg"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.5"
+  }
+}

@@ -68,6 +68,10 @@ test("popout URLs keep ?provider= for each host", () => {
   assert.equal(buildPopoutUrl({ popoutUrl: base, provider: "gemini" }), "http://127.0.0.1:5173/?provider=gemini&client=gemini");
   assert.equal(buildPopoutUrl({ popoutUrl: base, provider: "generic" }), "http://127.0.0.1:5173/?provider=generic&client=web");
   assert.equal(popoutClientFor("dev"), "web");
+  assert.equal(
+    buildPopoutUrl({ popoutUrl: "codefriends://open", provider: "cursor", handoff: "abc" }),
+    "codefriends://open?provider=cursor&client=cursor&handoff=abc",
+  );
 });
 
 test("VS Code host detect: Cursor vs generic (VSCodium / vanilla)", () => {
