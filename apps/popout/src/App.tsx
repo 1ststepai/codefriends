@@ -338,7 +338,7 @@ export function App() {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell${view === "library" ? " library-mode" : ""}`}>
       <header className="top">
         <div>
           <div className="kicker">Learn together</div>

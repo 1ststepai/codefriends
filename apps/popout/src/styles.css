@@ -99,6 +99,11 @@ h1 {
   color: #d7e8ff;
 }
 
+/* Library needs the list for the official shelf — profile/invites stay on Friends. */
+.shell.library-mode .self {
+  display: none;
+}
+
 .lede,
 .fineprint {
   color: var(--muted);
@@ -700,6 +705,10 @@ h1 {
   .fineprint,
   .banner {
     grid-column: 1;
+  }
+
+  .shell.library-mode:not(.login) {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   }
 
   .list {

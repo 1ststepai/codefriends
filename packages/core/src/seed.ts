@@ -151,8 +151,16 @@ export async function seedOfficialLibrary(store: Store): Promise<void> {
       usernameHint: author.username,
     });
   }
-  for (const row of OFFICIAL_LIBRARY) {
-    if (await store.findOfficialLibraryByUrl(row.url)) continue;
-    await store.addLibraryItem(author.id, row, "official");
+  const seededAt = 1_700_000_000_000;
+  for (const [index, row] of OFFICIAL_LIBRARY.entries()) {
+    const createdAt = seededAt + index;
+    const existing = await store.findOfficialLibraryByUrl(row.url);
+    if (existing) {
+      if (existing.createdAt !== createdAt) {
+        await store.db.prepare("UPDATE library_items SET created_at = ? WHERE id = ?").run(createdAt, existing.id);
+      }
+      continue;
+    }
+    await store.addLibraryItem(author.id, { ...row, createdAt }, "official");
   }
 }

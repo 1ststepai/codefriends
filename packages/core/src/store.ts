@@ -583,7 +583,7 @@ export class Store {
 
   async addLibraryItem(
     authorId: string,
-    input: { title: string; description: string; url: string; kind: string },
+    input: { title: string; description: string; url: string; kind: string; createdAt?: number },
     source: LibrarySource = "community",
   ): Promise<LibraryItem> {
     const title = input.title.trim();
@@ -596,7 +596,7 @@ export class Store {
     const url = cleanHttpsUrl(input.url);
     const author = await this.getUser(authorId);
     if (!author) throw new Error("Unknown user");
-    const now = Date.now();
+    const now = input.createdAt ?? Date.now();
     const item: LibraryItem = {
       id: randomUUID(),
       title,
