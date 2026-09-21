@@ -118,4 +118,25 @@ const MIGRATIONS: Array<{ name: string; sql: string }> = [
       CREATE INDEX IF NOT EXISTS messages_thread_created ON messages(thread_key, created_at);
     `,
   },
+  {
+    name: "003_invites",
+    sql: `
+      CREATE TABLE IF NOT EXISTS invites (
+        token_hash TEXT PRIMARY KEY,
+        created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS invites_created_by ON invites(created_by);
+      CREATE INDEX IF NOT EXISTS invites_expires_at ON invites(expires_at);
+    `,
+  },
+  {
+    name: "004_profile",
+    sql: `
+      ALTER TABLE users ADD COLUMN github_url TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN website TEXT NOT NULL DEFAULT '';
+      ALTER TABLE users ADD COLUMN tools TEXT NOT NULL DEFAULT '';
+    `,
+  },
 ];

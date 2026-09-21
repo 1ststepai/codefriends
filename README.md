@@ -1,8 +1,8 @@
 # CodeFriends
 
-Presence, friends, and DMs across coding tools — **Cursor / Claude / Codex / Gemini**.
+An **AI coding school with your friends in the room** — **Cursor / Claude / Codex / Gemini**.
 
-Friends list, online presence, status text, and click-to-DM — all in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM.
+Presence, 1:1 DMs, invite links, and a short profile (GitHub / tools) live in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM. Prompt/knowledge base, learning paths, and threads are next — this is not a Discord-for-devs headline.
 
 > **Not affiliated with Cursor, Anthropic, OpenAI, or Google.** This is an independent community project.
 
@@ -38,7 +38,7 @@ IDE (thin)                         Outside the IDE
 
 ## Persistence
 
-User accounts, **linked provider identities**, friend edges, and 1:1 DM history live in ordinary SQLite SQL (`users`, `identities`, `sessions`, `friends`, `messages`). Presence sockets stay in memory (Node) or a Cloudflare Durable Object (production); `last_seen` / status fields are written back to the database.
+User accounts, **linked provider identities**, friend edges, **invite tokens**, profiles, and 1:1 DM history live in ordinary SQLite SQL (`users`, `identities`, `sessions`, `friends`, `invites`, `messages`). Presence sockets stay in memory (Node) or a Cloudflare Durable Object (production); `last_seen` / status / “now working on” / profile fields are written back to the database.
 
 | Driver | When | Env |
 | --- | --- | --- |
@@ -46,7 +46,13 @@ User accounts, **linked provider identities**, friend edges, and 1:1 DM history 
 | **Cloudflare D1** | **$0 production** (`apps/worker`) | `wrangler.toml` `[[d1_databases]]` |
 | Turso / libSQL | Optional Node host with ephemeral disks | `CODEFRIENDS_LIBSQL_URL` + `CODEFRIENDS_LIBSQL_AUTH_TOKEN` |
 
-Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_thread_cap`). A process / Worker restart keeps users, identities, friends, and DMs. Seed data (`maya` / `parker` / …) is **idempotent** — inserted only when missing, never wiped.
+Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_thread_cap`, `003_invites`, and `004_profile`). A process / Worker restart keeps users, identities, friends, invites, profiles, and DMs. Seed data (`maya` / `parker` / …) is **idempotent** — inserted only when missing, never wiped.
+
+**Invite links:** a signed-in user creates a reusable token (hashed in SQLite, default **7 days**). Share the URL (`?invite=` or `/invite/<token>`) or paste the code. Accepting while signed in (dev username or any live provider) creates a **bidirectional friend edge immediately** — no email, no pending request. The same link can be used by several people until it expires. You cannot accept your own invite. Already-friends is a no-op.
+
+**Status / now working on:** free-text (80 chars) plus optional IDE/client label (`cursor` / `claude` / `codex` / `gemini` / `web`). Sent over the existing `presence` WebSocket message and shown under each friend in the popout.
+
+**Profile share:** optional `githubUrl` (must be `github.com`, pasted — no GitHub OAuth), optional `website`, and a short tools list (comma-separated, stored on `users`). You edit your own via `POST /api/me/profile`. Friends see it on the presence payload and in the popout (chips + links on the DM header).
 
 **DM history cap:** each 1:1 thread keeps the last **200** messages (`CODEFRIENDS_DM_HISTORY_LIMIT`). Older rows are pruned on write. Text only — no media, no blob store.
 
@@ -119,6 +125,8 @@ npm run dev
 - SQLite file: `apps/server/data/codefriends.sqlite`
 
 Open the popout in two browser profiles (or a window + a private window). Sign in as `maya` in one and `parker` in the other. Click a friend to DM. Presence and messages are live. Restart the server: the same users and DMs are still there.
+
+To add someone who is not already on the seed roster: **Create invite link** in the popout, copy it, and open it while signed in as the other person (or paste the code). Accepting makes you friends immediately. Set **Now working on** — friends see that status text under your name.
 
 To fill **Agents online** the way the concept mockup does (without a second human), keep the seed agent sockets alive:
 
@@ -193,14 +201,14 @@ npm run test:connect
 
 ## Smoke test
 
-Proves two users can go online, exchange a 1:1 DM, **and that history is still there after a server restart**. Also exercises mock provider linking (one CodeFriends user, Cursor + Claude subjects). Starts an ephemeral server with a temp SQLite file.
+Proves two users can go online, exchange a 1:1 DM, **and that history is still there after a server restart**. Also exercises mock provider linking, **invite accept** (reusable token → friend edge), **status-text broadcast**, **profile share**, and serving the built popout. Starts an ephemeral server with a temp SQLite file.
 
 ```bash
 npm run smoke
 npm run test:connect
 ```
 
-Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned`
+Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived restart, identities linked, DM cap pruned, invite accepted, status broadcast, profile shared, popout static served`
 
 `test:connect` prints the documented prompt paths (first run, Not now cooldown, Don’t ask again, already connected, host popout URLs).
 
@@ -220,10 +228,14 @@ Expected: `smoke ok: maya + parker online, 1:1 DM delivered, history survived re
 | `POST` | `/api/auth/handoff/redeem` | `{ code }` → `{ token, user }` |
 | `POST` | `/api/auth/logout` | Revokes that bearer token |
 | `GET` | `/api/me` | User + friends + linked identities |
+| `POST` | `/api/me/profile` | Bearer + `{ githubUrl?, website?, tools? }` — own profile only |
 | `GET` / `POST` | `/api/friends` | List / add by username |
+| `POST` | `/api/invites` | Bearer → `{ token, url, path, expiresAt }` (reusable, 7 days) |
+| `GET` | `/api/invites/:token` | Public peek: inviter + expiry (no auth) |
+| `POST` | `/api/invites/accept` | Bearer + `{ token }` (raw code or pasted URL) → friend edge |
 | `GET` | `/api/messages?with=` | History |
 | `GET` | `/api/presence` | Public online count (status bar) |
-| `WS` | `/ws?token=` | `hello`, `presence`, `add_friend`, `dm`, `typing` (unchanged) |
+| `WS` | `/ws?token=` | `hello`, `presence` (includes `statusText` + `client`), `add_friend`, `dm`, `typing` |
 
 ## $0 deploy (not already live)
 
@@ -350,8 +362,9 @@ Use only if you already have Fly or Render free allowance. Both often **ask for 
 
 ## Next
 
-- Official Cursor / Claude / Codex identity programs → fill in the existing adapters (thin connect prompts already open the popout)
-- Voice and Live Share-style pairing (not this slice)
+- Prompt / knowledge base, learning paths, and threads (education-first next slice)
+- Official Cursor / Claude / Codex identity programs → fill in the existing adapters
+- Group chats, file uploads, voice / video (not this slice)
 
 ## License
 

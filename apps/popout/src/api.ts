@@ -1,4 +1,5 @@
 import type { AuthProviderInfo, PublicUser } from "@codefriends/shared";
+import { parseInviteToken } from "@codefriends/shared";
 import { apiUrl } from "./config";
 
 export interface AuthCatalog {
@@ -46,6 +47,62 @@ export async function mockProviderLogin(
     body: JSON.stringify(body),
   });
   return readSession(res, "Mock login failed");
+}
+
+export async function peekInvite(raw: string) {
+  const token = parseInviteToken(raw);
+  if (!token) throw new Error("Invite expired or not found");
+  const res = await fetch(apiUrl(`/api/invites/${encodeURIComponent(token)}`));
+  const data = (await res.json()) as { inviter?: PublicUser; expiresAt?: number; error?: string };
+  if (!res.ok || !data.inviter) throw new Error(data.error ?? "Invite expired or not found");
+  return { inviter: data.inviter, expiresAt: data.expiresAt ?? 0 };
+}
+
+export async function createInvite(token: string) {
+  const res = await fetch(apiUrl("/api/invites"), {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const data = (await res.json()) as {
+    token?: string;
+    url?: string;
+    path?: string;
+    expiresAt?: number;
+    error?: string;
+  };
+  if (!res.ok || !data.token || !data.url) throw new Error(data.error ?? "Could not create invite");
+  return { token: data.token, url: data.url, path: data.path ?? `/invite/${data.token}`, expiresAt: data.expiresAt ?? 0 };
+}
+
+export async function acceptInvite(sessionToken: string, raw: string) {
+  const res = await fetch(apiUrl("/api/invites/accept"), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${sessionToken}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ token: parseInviteToken(raw) }),
+  });
+  const data = (await res.json()) as { friend?: PublicUser; friends?: PublicUser[]; error?: string };
+  if (!res.ok || !data.friend || !data.friends) throw new Error(data.error ?? "Could not accept invite");
+  return { friend: data.friend, friends: data.friends };
+}
+
+export async function updateProfile(
+  token: string,
+  patch: { githubUrl?: string; website?: string; tools?: string },
+) {
+  const res = await fetch(apiUrl("/api/me/profile"), {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(patch),
+  });
+  const data = (await res.json()) as { user?: PublicUser; error?: string };
+  if (!res.ok || !data.user) throw new Error(data.error ?? "Could not update profile");
+  return data.user;
 }
 
 export async function createHandoff(token: string) {

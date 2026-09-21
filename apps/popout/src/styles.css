@@ -99,7 +99,8 @@ h1 {
 .search input,
 .composer input,
 .login input,
-.status-input {
+.status-input,
+.invite input {
   width: 100%;
   background: #1b1b1b;
   border: 1px solid var(--line);
@@ -111,8 +112,16 @@ h1 {
 .search input:focus,
 .composer input:focus,
 .login input:focus,
-.status-input:focus {
+.status-input:focus,
+.invite input:focus {
   border-color: var(--accent);
+}
+
+.status-label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .self {
@@ -360,6 +369,54 @@ h1 {
 
 .ghost {
   background: transparent;
+}
+
+.ghost.compact {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.invite {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.invite-row,
+.invite-accept {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.invite-accept input {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.profile-bits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--soft);
+}
+
+.profile-bits a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.tools {
+  color: var(--muted);
 }
 
 .login form {

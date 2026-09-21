@@ -38,6 +38,9 @@ export interface PublicUser {
   client: ClientKind;
   online: boolean;
   lastSeen: number;
+  githubUrl: string;
+  website: string;
+  tools: string[];
   identities?: LinkedIdentity[];
 }
 
@@ -107,6 +110,70 @@ export function isValidUsername(raw: string): boolean {
 /** Last N text DMs kept per 1:1 thread. Older rows are pruned on write. */
 export const DM_HISTORY_LIMIT_DEFAULT = 200;
 export const DM_TEXT_MAX = 2000;
+export const STATUS_TEXT_MAX = 80;
+export const TOOLS_MAX = 12;
+export const TOOL_NAME_MAX = 24;
+export const PROFILE_URL_MAX = 200;
+/** Reusable invite links expire after 7 days. */
+export const INVITE_TTL_MS_DEFAULT = 7 * 24 * 60 * 60 * 1000;
+
+/** Accept a raw token, `?invite=`, `/invite/code`, or a full popout URL. */
+export function parseInviteToken(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed, "https://invite.local");
+    const fromQuery = url.searchParams.get("invite")?.trim();
+    if (fromQuery) return fromQuery;
+    const fromPath = /\/invite\/([^/]+)$/.exec(url.pathname);
+    if (fromPath) return decodeURIComponent(fromPath[1]);
+  } catch {
+    /* not a URL */
+  }
+  return trimmed;
+}
+
+export function parseTools(raw: unknown): string[] {
+  const parts = Array.isArray(raw) ? raw.map((item) => String(item)) : String(raw ?? "").split(",");
+  const seen = new Set<string>();
+  const tools: string[] = [];
+  for (const part of parts) {
+    const tool = part.trim().slice(0, TOOL_NAME_MAX);
+    if (!tool) continue;
+    const key = tool.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tools.push(tool);
+    if (tools.length >= TOOLS_MAX) break;
+  }
+  return tools;
+}
+
+export function cleanHttpUrl(raw: string, host?: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  if (trimmed.length > PROFILE_URL_MAX) throw new Error("URL is too long");
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error("Enter a full http(s) URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("URL must be http(s)");
+  }
+  if (host) {
+    const hostname = url.hostname.replace(/^www\./, "");
+    if (hostname !== host) throw new Error(`URL must be on ${host}`);
+  }
+  return url.toString();
+}
+
+export function invitePopoutUrl(popoutUrl: string, token: string): string {
+  const url = new URL(popoutUrl);
+  url.searchParams.set("invite", token);
+  return url.toString();
+}
 
 export {
   CONNECT_SNOOZE_MS,

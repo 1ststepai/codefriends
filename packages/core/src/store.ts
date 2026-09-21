@@ -1,8 +1,12 @@
 import {
+  cleanHttpUrl,
   conversationKey,
   DM_TEXT_MAX,
   isValidUsername,
   normalizeUsername,
+  parseInviteToken,
+  parseTools,
+  STATUS_TEXT_MAX,
   type AuthProvider,
   type ChatMessage,
   type ClientKind,
@@ -24,6 +28,9 @@ export interface UserRecord {
   statusText: string;
   client: ClientKind;
   lastSeen: number;
+  githubUrl: string;
+  website: string;
+  tools: string;
   createdAt: number;
 }
 
@@ -35,6 +42,9 @@ interface UserRow {
   status_text: string;
   client: string;
   last_seen: number;
+  github_url?: string;
+  website?: string;
+  tools?: string;
   created_at: number;
 }
 
@@ -68,6 +78,9 @@ export class Store {
       statusText: input.statusText ?? "Available",
       client: input.client ?? "web",
       lastSeen: input.lastSeen ?? Date.now(),
+      githubUrl: "",
+      website: "",
+      tools: "",
       createdAt: Date.now(),
     };
     await this.db
@@ -259,9 +272,24 @@ export class Store {
     const user = await this.getUser(userId);
     if (!user) throw new Error("Unknown user");
     if (patch.status) user.status = patch.status;
-    if (typeof patch.statusText === "string") user.statusText = patch.statusText.slice(0, 80);
+    if (typeof patch.statusText === "string") user.statusText = patch.statusText.slice(0, STATUS_TEXT_MAX);
     if (patch.client) user.client = patch.client;
     await this.persistUser(user);
+    return user;
+  }
+
+  async updateProfile(
+    userId: string,
+    patch: { githubUrl?: string; website?: string; tools?: unknown },
+  ): Promise<UserRecord> {
+    const user = await this.getUser(userId);
+    if (!user) throw new Error("Unknown user");
+    if (patch.githubUrl !== undefined) user.githubUrl = cleanHttpUrl(patch.githubUrl, "github.com");
+    if (patch.website !== undefined) user.website = cleanHttpUrl(patch.website);
+    if (patch.tools !== undefined) user.tools = parseTools(patch.tools).join(", ");
+    await this.db
+      .prepare("UPDATE users SET github_url = ?, website = ?, tools = ? WHERE id = ?")
+      .run(user.githubUrl, user.website, user.tools, user.id);
     return user;
   }
 
@@ -294,6 +322,9 @@ export class Store {
       client: user.client,
       online,
       lastSeen: user.lastSeen,
+      githubUrl: user.githubUrl,
+      website: user.website,
+      tools: parseTools(user.tools),
       identities: opts?.identities ? await this.identitiesOf(user.id) : undefined,
     };
   }
@@ -462,6 +493,39 @@ export class Store {
     };
   }
 
+  async createInvite(userId: string): Promise<{ token: string; expiresAt: number }> {
+    const token = randomHex(12);
+    const now = Date.now();
+    const expiresAt = now + this.config.inviteTtlMs;
+    await this.db
+      .prepare("INSERT INTO invites (token_hash, created_by, created_at, expires_at) VALUES (?, ?, ?, ?)")
+      .run(await sha256Hex(token), userId, now, expiresAt);
+    return { token, expiresAt };
+  }
+
+  async peekInvite(rawToken: string): Promise<{ inviter: UserRecord; expiresAt: number } | undefined> {
+    const token = parseInviteToken(rawToken);
+    if (!token) return undefined;
+    const row = await this.db
+      .prepare(
+        `SELECT u.*, i.expires_at
+         FROM invites i
+         JOIN users u ON u.id = i.created_by
+         WHERE i.token_hash = ? AND i.expires_at > ?`,
+      )
+      .get<UserRow & { expires_at: number }>(await sha256Hex(token), Date.now());
+    if (!row) return undefined;
+    return { inviter: rowToUser(row), expiresAt: row.expires_at };
+  }
+
+  /** Instant bidirectional friend edge. Token stays valid until expiry (reusable). */
+  async acceptInvite(userId: string, rawToken: string): Promise<PublicUser> {
+    const peeked = await this.peekInvite(rawToken);
+    if (!peeked) throw new Error("Invite expired or not found");
+    if (peeked.inviter.id === userId) throw new Error("You cannot accept your own invite");
+    return this.addFriend(userId, peeked.inviter.username);
+  }
+
   async createHandoff(userId: string): Promise<string> {
     const code = randomHex(24);
     const now = Date.now();
@@ -515,6 +579,9 @@ function rowToUser(row: UserRow): UserRecord {
     statusText: row.status_text,
     client: row.client as ClientKind,
     lastSeen: row.last_seen,
+    githubUrl: row.github_url ?? "",
+    website: row.website ?? "",
+    tools: row.tools ?? "",
     createdAt: row.created_at,
   };
 }

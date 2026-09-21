@@ -6,10 +6,28 @@ import type {
   PublicUser,
   WsServerMessage,
 } from "@codefriends/shared";
-import { CLIENTS, CLIENT_LABEL } from "@codefriends/shared";
+import { CLIENTS, CLIENT_LABEL, parseInviteToken, STATUS_TEXT_MAX } from "@codefriends/shared";
 import type { AuthProviderInfo } from "@codefriends/shared";
-import { apiUrl, fetchProviders, login, mockProviderLogin, redeemHandoff, wsUrl } from "./api";
-import { clearSession, loadSession, saveSession } from "./session";
+import {
+  acceptInvite,
+  apiUrl,
+  createInvite,
+  fetchProviders,
+  login,
+  mockProviderLogin,
+  peekInvite,
+  redeemHandoff,
+  updateProfile,
+  wsUrl,
+} from "./api";
+import {
+  clearPendingInvite,
+  clearSession,
+  loadPendingInvite,
+  loadSession,
+  savePendingInvite,
+  saveSession,
+} from "./session";
 
 const AGENT_CLIENTS = new Set<ClientKind>(["cursor", "claude", "codex", "gemini"]);
 
@@ -28,6 +46,9 @@ export function App() {
   const [providers, setProviders] = useState<AuthProviderInfo[]>([]);
   const [mockProviders, setMockProviders] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(() => hasAuthQuery());
+  const [pendingInvite, setPendingInvite] = useState(() => inviteFromLocation() || loadPendingInvite());
+  const [inviteFrom, setInviteFrom] = useState<PublicUser | null>(null);
+  const [wsReady, setWsReady] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -45,6 +66,56 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const fromUrl = inviteFromLocation();
+    if (fromUrl) {
+      savePendingInvite(fromUrl);
+      setPendingInvite(fromUrl);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!pendingInvite) {
+      setInviteFrom(null);
+      return;
+    }
+    let cancelled = false;
+    peekInvite(pendingInvite)
+      .then((info) => {
+        if (!cancelled) setInviteFrom(info.inviter);
+      })
+      .catch(() => {
+        if (!cancelled) setInviteFrom(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingInvite]);
+
+  useEffect(() => {
+    if (!token || !pendingInvite || !wsReady) return;
+    let cancelled = false;
+    void acceptInvite(token, pendingInvite)
+      .then((result) => {
+        if (cancelled) return;
+        setFriends(result.friends);
+        setActiveId((cur) => cur ?? result.friend.id);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not accept invite");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        clearPendingInvite();
+        setPendingInvite("");
+        setInviteFrom(null);
+        stripInviteLocation();
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, pendingInvite, wsReady]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -86,6 +157,7 @@ export function App() {
     if (!token) return;
     let cancelled = false;
     let retry: number | undefined;
+    setWsReady(false);
     const connect = () => {
       const ws = new WebSocket(wsUrl(token));
       wsRef.current = ws;
@@ -100,6 +172,7 @@ export function App() {
           setMessages(msg.messages);
           saveSession({ token, user: msg.self });
           setActiveId((cur) => cur ?? pickDefaultFriend(msg.friends, msg.messages, msg.self.id));
+          setWsReady(true);
         } else if (msg.type === "friends") {
           setFriends(msg.friends);
         } else if (msg.type === "presence") {
@@ -170,6 +243,7 @@ export function App() {
         error={error}
         providers={providers}
         mockProviders={mockProviders}
+        inviteFrom={inviteFrom}
         onReady={(t, u) => {
           saveSession({ token: t, user: u });
           setToken(t);
@@ -184,7 +258,7 @@ export function App() {
     <div className="shell">
       <header className="top">
         <div>
-          <div className="kicker">Community</div>
+          <div className="kicker">Learn together</div>
           <h1>CodeFriends</h1>
         </div>
         <button
@@ -206,7 +280,7 @@ export function App() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search community"
+          placeholder="Search friends"
           onKeyDown={(e) => {
             if (e.key === "Enter" && query.trim()) {
               send({ type: "add_friend", username: query.trim() });
@@ -225,6 +299,7 @@ export function App() {
           setSelf(u);
           saveSession({ token, user: u });
         }}
+        onFriends={setFriends}
         onError={setError}
       />
 
@@ -267,7 +342,7 @@ export function App() {
 
       {error ? <p className="banner">{error}</p> : null}
       <footer className="fineprint">
-        CodeFriends overlay. Not affiliated with Cursor, Anthropic, OpenAI, or Google.
+        CodeFriends popout. Not affiliated with Cursor, Anthropic, OpenAI, or Google.
       </footer>
     </div>
   );
@@ -279,12 +354,14 @@ function Login({
   onReady,
   providers,
   mockProviders,
+  inviteFrom,
 }: {
   error: string;
   onError: (msg: string) => void;
   onReady: (token: string, user: PublicUser) => void;
   providers: AuthProviderInfo[];
   mockProviders: boolean;
+  inviteFrom: PublicUser | null;
 }) {
   const hinted = providerHint();
   const genericHost = hinted === "generic";
@@ -300,13 +377,20 @@ function Login({
 
   return (
     <div className="shell login">
-      <div className="kicker">CodeFriends</div>
-      <h1>Drop in without burning IDE RAM</h1>
+      <div className="kicker">Learn together</div>
+      <h1>An AI coding school with your friends in the room</h1>
       <p className="lede">
-        Sign in with the same account you already use in Cursor, Claude, Codex, or Gemini. One
-        CodeFriends user can link several of those identities so the friends graph stays a single
-        person.
+        Learn with friends while you use Cursor, Claude, Codex, or Gemini. Presence, DMs, and a
+        short profile (GitHub / tools) now — prompt/knowledge base, learning paths, and threads
+        next. One CodeFriends user can link several of those identities so you stay a single person
+        in the room.
       </p>
+      {inviteFrom ? (
+        <p className="lede highlight">
+          Invite from <strong>{inviteFrom.displayName}</strong> (@{inviteFrom.username}). Sign in and
+          you’ll be friends immediately — no request to approve.
+        </p>
+      ) : null}
       {genericHost ? (
         <p className="lede highlight">
           Opened from a local / open-source editor (VS Code, VSCodium, Continue, Ollama GUI, Open
@@ -476,6 +560,7 @@ function SelfBar({
   providers,
   token,
   onLinked,
+  onFriends,
   onError,
 }: {
   self: PublicUser;
@@ -484,6 +569,7 @@ function SelfBar({
   providers: AuthProviderInfo[];
   token: string;
   onLinked: (user: PublicUser) => void;
+  onFriends: (friends: PublicUser[]) => void;
   onError: (msg: string) => void;
 }) {
   return (
@@ -511,12 +597,18 @@ function SelfBar({
             ))}
           </select>
         </div>
-        <input
-          className="status-input"
-          value={self.statusText}
-          onChange={(e) => onChange({ statusText: e.target.value })}
-          placeholder="What are you working on?"
-        />
+        <label className="status-label">
+          Now working on
+          <input
+            className="status-input"
+            value={self.statusText}
+            maxLength={STATUS_TEXT_MAX}
+            onChange={(e) => onChange({ statusText: e.target.value })}
+            placeholder="a lesson, a refactor, pairing…"
+          />
+        </label>
+        <ProfileEditor self={self} token={token} onSaved={onLinked} onError={onError} />
+        <InviteBar token={token} onFriends={onFriends} onError={onError} />
         <LinkedAccounts
           self={self}
           providers={providers}
@@ -525,6 +617,184 @@ function SelfBar({
           onError={onError}
         />
       </div>
+    </div>
+  );
+}
+
+function ProfileEditor({
+  self,
+  token,
+  onSaved,
+  onError,
+}: {
+  self: PublicUser;
+  token: string;
+  onSaved: (user: PublicUser) => void;
+  onError: (msg: string) => void;
+}) {
+  const [githubUrl, setGithubUrl] = useState(self.githubUrl ?? "");
+  const [website, setWebsite] = useState(self.website ?? "");
+  const [tools, setTools] = useState((self.tools ?? []).join(", "));
+
+  useEffect(() => {
+    setGithubUrl(self.githubUrl ?? "");
+    setWebsite(self.website ?? "");
+    setTools((self.tools ?? []).join(", "));
+  }, [self.githubUrl, self.website, self.tools]);
+
+  const save = async (patch: { githubUrl?: string; website?: string; tools?: string }) => {
+    onError("");
+    try {
+      onSaved(await updateProfile(token, patch));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Could not update profile");
+    }
+  };
+
+  return (
+    <div className="profile-edit">
+      <label className="status-label">
+        GitHub
+        <input
+          className="status-input"
+          value={githubUrl}
+          placeholder="https://github.com/you"
+          onChange={(e) => setGithubUrl(e.target.value)}
+          onBlur={() => {
+            if (githubUrl !== (self.githubUrl ?? "")) void save({ githubUrl });
+          }}
+        />
+      </label>
+      <label className="status-label">
+        Website
+        <input
+          className="status-input"
+          value={website}
+          placeholder="https://"
+          onChange={(e) => setWebsite(e.target.value)}
+          onBlur={() => {
+            if (website !== (self.website ?? "")) void save({ website });
+          }}
+        />
+      </label>
+      <label className="status-label">
+        Tools
+        <input
+          className="status-input"
+          value={tools}
+          placeholder="Cursor, Claude, Rust"
+          onChange={(e) => setTools(e.target.value)}
+          onBlur={() => {
+            if (tools !== (self.tools ?? []).join(", ")) void save({ tools });
+          }}
+        />
+      </label>
+    </div>
+  );
+}
+
+function ProfileBits({ user, links }: { user: PublicUser; links: boolean }) {
+  const tools = user.tools ?? [];
+  if (!user.githubUrl && !user.website && tools.length === 0) return null;
+  return (
+    <span className="profile-bits">
+      {tools.length ? <span className="tools">{tools.join(" · ")}</span> : null}
+      {links && user.githubUrl ? (
+        <a href={user.githubUrl} target="_blank" rel="noreferrer">
+          GitHub
+        </a>
+      ) : user.githubUrl ? (
+        <span className="tools">GitHub</span>
+      ) : null}
+      {links && user.website ? (
+        <a href={user.website} target="_blank" rel="noreferrer">
+          Site
+        </a>
+      ) : null}
+    </span>
+  );
+}
+
+function InviteBar({
+  token,
+  onFriends,
+  onError,
+}: {
+  token: string;
+  onFriends: (friends: PublicUser[]) => void;
+  onError: (msg: string) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [paste, setPaste] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div className="invite">
+      <div className="invite-row">
+        <button
+          type="button"
+          className="ghost compact"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            onError("");
+            try {
+              const created = await createInvite(token);
+              setUrl(created.url);
+              const ok = await copyText(created.url);
+              setCopied(ok);
+            } catch (err) {
+              onError(err instanceof Error ? err.message : "Could not create invite");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Creating…" : "Create invite link"}
+        </button>
+        {url ? (
+          <button
+            type="button"
+            className="ghost compact"
+            onClick={async () => {
+              const ok = await copyText(url);
+              setCopied(ok);
+            }}
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+        ) : null}
+      </div>
+      {url ? <input className="status-input" readOnly value={url} onFocus={(e) => e.target.select()} /> : null}
+      <form
+        className="invite-accept"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!paste.trim()) return;
+          setBusy(true);
+          onError("");
+          try {
+            const result = await acceptInvite(token, paste);
+            onFriends(result.friends);
+            setPaste("");
+          } catch (err) {
+            onError(err instanceof Error ? err.message : "Could not accept invite");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <input
+          value={paste}
+          onChange={(e) => setPaste(e.target.value)}
+          placeholder="Paste invite link or code"
+          autoComplete="off"
+        />
+        <button className="ghost compact" disabled={busy || !paste.trim()} type="submit">
+          Accept
+        </button>
+      </form>
     </div>
   );
 }
@@ -609,9 +879,10 @@ function FriendRow({
       <span className="meta">
         <span className="name-line">
           <strong>{friend.displayName}</strong>
-          {showClient ? <ClientBadge client={friend.client} /> : null}
+          {showClient || friend.online ? <ClientBadge client={friend.client} /> : null}
         </span>
         <span className="status">{friend.statusText || (friend.online ? "Available" : "Offline")}</span>
+        <ProfileBits user={friend} links={false} />
       </span>
     </button>
   );
@@ -648,7 +919,7 @@ function DmPanel({
   if (!friend) {
     return (
       <section className="dm empty">
-        <p>Click a friend to DM. The IDE stays a thin badge — this popout holds the chat.</p>
+        <p>Click a friend to DM. Learn in the same room — this popout holds the chat, not the IDE.</p>
       </section>
     );
   }
@@ -658,6 +929,7 @@ function DmPanel({
       <header>
         <span>
           DM · <strong>{friend.displayName}</strong>
+          <ProfileBits user={friend} links />
         </span>
         <span className="chevron" aria-hidden>
           ▾
@@ -742,6 +1014,26 @@ function hashHue(name: string) {
 
 function formatTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function inviteFromLocation(): string {
+  return parseInviteToken(window.location.href);
+}
+
+function stripInviteLocation(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("invite");
+  if (url.pathname.startsWith("/invite/")) url.pathname = "/";
+  window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+}
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function hasAuthQuery(): boolean {
