@@ -101,6 +101,9 @@ export const DEMO_USERNAMES = DEMO.map((d) => d.username);
 
 export const OFFICIAL_LIBRARY_USERNAME = "1ststep";
 
+/** GitHub blob base for in-repo docs on the official shelf (same pattern as Help packet). */
+const DOCS_BLOB = "https://github.com/1ststepai/codefriends/blob/main/docs";
+
 /** Official 1stStep shelf. GitHub URLs are seeded even when a repo is private — self-hosted cohorts can open it. */
 const OFFICIAL_LIBRARY: Array<{
   title: string;
@@ -149,6 +152,68 @@ const OFFICIAL_LIBRARY: Array<{
     description:
       "Write a portable markdown brief so a friend can finish stuck work on their own AI usage, then send back a PR.",
     url: HELP_PACKET_LIBRARY_URL,
+    kind: "prompt",
+  },
+  {
+    title: "School Paths",
+    description:
+      "Eight production paths — presence through backups. Tool-agnostic outlines for an AI coding school with friends in the room.",
+    url: `${DOCS_BLOB}/school-paths/README.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 01: Friend-visible demo",
+    description: "Presence + one DM that proves the product is alive for a signed-in friend.",
+    url: `${DOCS_BLOB}/school-paths/path-01-friend-visible-demo.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 02: Auth that isn't a toy",
+    description: "Real sign-in, hashed sessions, and honest blocked providers — no pretend OAuth.",
+    url: `${DOCS_BLOB}/school-paths/path-02-auth-that-isnt-a-toy.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 03: Data you won't lose",
+    description: "Durable store, named migrations, restart survival for DMs and the board.",
+    url: `${DOCS_BLOB}/school-paths/path-03-data-you-wont-lose.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 04: Secrets & config hygiene",
+    description: "Env examples, matching callbacks, never commit keys.",
+    url: `${DOCS_BLOB}/school-paths/path-04-secrets-and-config-hygiene.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 05: Input validation & abuse basics",
+    description: "Bounds, auth gates, and safe defaults for board and library writes.",
+    url: `${DOCS_BLOB}/school-paths/path-05-input-validation-and-abuse.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 06: Deploy & health checks",
+    description: "Public https origin, /health green, smoke after deploy — no new paywall for core.",
+    url: `${DOCS_BLOB}/school-paths/path-06-deploy-and-health-checks.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 07: Observability",
+    description: "Readable failures and gated metrics — diagnose without dumping secrets.",
+    url: `${DOCS_BLOB}/school-paths/path-07-observability.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path 08: Recovery & backups",
+    description: "Practice one restore path before the disk dies. Seeds are not a backup.",
+    url: `${DOCS_BLOB}/school-paths/path-08-recovery-and-backups.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Path help packets",
+    description:
+      "One help-packet template per School Path — goal, constraints, success criteria, send-back checklist.",
+    url: `${DOCS_BLOB}/help-packets/README.md`,
     kind: "prompt",
   },
 ];
