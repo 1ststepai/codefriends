@@ -157,63 +157,87 @@ const OFFICIAL_LIBRARY: Array<{
   {
     title: "School Paths",
     description:
-      "Eight production paths — presence through backups. Tool-agnostic outlines for an AI coding school with friends in the room.",
+      "Build → Finish → Ship: eight tool-agnostic paths from friend-visible demo to restore drill.",
     url: `${DOCS_BLOB}/school-paths/README.md`,
     kind: "prompt",
   },
   {
     title: "Path 01: Friend-visible demo",
-    description: "Presence + one DM that proves the product is alive for a signed-in friend.",
+    description: "Build — presence + one DM that proves the product is alive for a signed-in friend.",
     url: `${DOCS_BLOB}/school-paths/path-01-friend-visible-demo.md`,
     kind: "prompt",
   },
   {
     title: "Path 02: Auth that isn't a toy",
-    description: "Real sign-in, hashed sessions, and honest blocked providers — no pretend OAuth.",
+    description: "Finish — real sign-in, hashed sessions, and honest blocked providers.",
     url: `${DOCS_BLOB}/school-paths/path-02-auth-that-isnt-a-toy.md`,
     kind: "prompt",
   },
   {
     title: "Path 03: Data you won't lose",
-    description: "Durable store, named migrations, restart survival for DMs and the board.",
+    description: "Finish — durable store, named migrations, restart survival for DMs and the board.",
     url: `${DOCS_BLOB}/school-paths/path-03-data-you-wont-lose.md`,
     kind: "prompt",
   },
   {
     title: "Path 04: Secrets & config hygiene",
-    description: "Env examples, matching callbacks, never commit keys.",
+    description: "Finish — env examples, matching callbacks, never commit keys.",
     url: `${DOCS_BLOB}/school-paths/path-04-secrets-and-config-hygiene.md`,
     kind: "prompt",
   },
   {
-    title: "Path 05: Input validation & abuse basics",
-    description: "Bounds, auth gates, and safe defaults for board and library writes.",
+    title: "Path 05: Security & abuse basics",
+    description: "Finish — bounds, auth gates, and optional security drills (session, redirect, frames, store ACL).",
     url: `${DOCS_BLOB}/school-paths/path-05-input-validation-and-abuse.md`,
     kind: "prompt",
   },
   {
     title: "Path 06: Deploy & health checks",
-    description: "Public https origin, /health green, smoke after deploy — no new paywall for core.",
+    description: "Finish → Ship — public https origin, /health green, smoke after deploy.",
     url: `${DOCS_BLOB}/school-paths/path-06-deploy-and-health-checks.md`,
     kind: "prompt",
   },
   {
     title: "Path 07: Observability",
-    description: "Readable failures and gated metrics — diagnose without dumping secrets.",
+    description: "Ship — readable failures and gated metrics without dumping secrets.",
     url: `${DOCS_BLOB}/school-paths/path-07-observability.md`,
     kind: "prompt",
   },
   {
     title: "Path 08: Recovery & backups",
-    description: "Practice one restore path before the disk dies. Seeds are not a backup.",
+    description: "Ship — practice one restore path before the disk dies. Seeds are not a backup.",
     url: `${DOCS_BLOB}/school-paths/path-08-recovery-and-backups.md`,
     kind: "prompt",
   },
   {
     title: "Path help packets",
     description:
-      "One help-packet template per School Path — goal, constraints, success criteria, send-back checklist.",
+      "Build → Finish → Ship packets: failure scenario, one fix, Ask your AI, prove-it, friend review.",
     url: `${DOCS_BLOB}/help-packets/README.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Security: Session regenerate",
+    description: "Optional Path 05 — rotate session/token after login so a planted id cannot ride auth.",
+    url: `${DOCS_BLOB}/help-packets/security-session-regenerate.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Security: Redirect allowlist",
+    description: "Optional Path 05 — stop post-login open redirects from sending friends to phishing hosts.",
+    url: `${DOCS_BLOB}/help-packets/security-redirect-allowlist.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Security: Frame denial",
+    description: "Optional Path 05 — X-Frame-Options / CSP frame-ancestors so your UI cannot be costumed in an iframe.",
+    url: `${DOCS_BLOB}/help-packets/security-frame-denial.md`,
+    kind: "prompt",
+  },
+  {
+    title: "Security: Session-store ACL",
+    description: "Optional Path 05 — lock down Redis-like session caches (or document why local sessions are enough).",
+    url: `${DOCS_BLOB}/help-packets/security-session-store-acl.md`,
     kind: "prompt",
   },
 ];
@@ -240,8 +264,17 @@ export async function seedOfficialLibrary(store: Store): Promise<void> {
     const createdAt = seededAt + index;
     const existing = await store.findOfficialLibraryByUrl(row.url);
     if (existing) {
-      if (existing.createdAt !== createdAt) {
-        await store.db.prepare("UPDATE library_items SET created_at = ? WHERE id = ?").run(createdAt, existing.id);
+      if (
+        existing.createdAt !== createdAt ||
+        existing.title !== row.title ||
+        existing.description !== row.description ||
+        existing.kind !== row.kind
+      ) {
+        await store.db
+          .prepare(
+            "UPDATE library_items SET title = ?, description = ?, kind = ?, created_at = ? WHERE id = ?",
+          )
+          .run(row.title, row.description, row.kind, createdAt, existing.id);
       }
       continue;
     }

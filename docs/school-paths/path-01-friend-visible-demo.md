@@ -1,36 +1,28 @@
-# Path 01: Ship a friend-visible demo
+# Path 01: Friend-visible demo
 
-**Goal:** Something another signed-in friend can see — presence online, and one 1:1 DM delivered — without building Discord.
+**Stage:** Build  
+**Goal:** A thin vertical slice another signed-in friend can see — presence online and one 1:1 DM delivered.
 
 **Help packet:** [path-01-friend-visible-demo.md](../help-packets/path-01-friend-visible-demo.md)
 
-## Why this path
+## What can go wrong
 
-A demo nobody else can open is a private sketch. CodeFriends starts with friends in the room: you go online, they go online, one message lands.
+You “ship” a local sketch nobody else can open. Friends never see presence or a message, so the cohort has no shared proof the product is alive.
 
-## Constraints
+## Ask your AI to…
 
-- Text only. No voice, Live Share, or media blobs.
-- Use the existing popout / API surface when working on this repo; if you are building elsewhere, keep the same bar: presence + one DM.
-- Tool-agnostic — Cursor, Claude, Codex, Gemini, or other. Run agents on **your** account.
-- Do not invent a second chat product. Prove the smallest friend-visible loop.
+1. Wire the smallest loop: two signed-in clients, online presence, one DM send/receive.
+2. Keep text-only — no voice, Live Share, or media.
+3. Document how a friend proves it (who was online, what landed).
 
-## Steps
+## Prove it
 
-1. **Two identities.** Sign in as yourself; have a friend (or a second test user) signed in on another client.
-2. **Presence.** Confirm both appear online (status bar count and/or friends list). Optional: set a short “now working on” status.
-3. **One DM.** Send a single 1:1 message. Confirm it arrives and, if the product claims history, that it survives a refresh.
-4. **Share the proof.** Screenshot or note: who was online, what was sent, what the friend saw. No vanity metrics.
+- [ ] Two users online at once.
+- [ ] One DM delivered to the intended friend.
+- [ ] One-sentence definition of “friend-visible” for this product.
 
-## Success criteria
+## Friend review questions
 
-- [ ] At least two users show as online at the same time.
-- [ ] One DM is delivered to the intended friend (not a channel dump).
-- [ ] You can explain in one sentence what “friend-visible” means for this product.
-- [ ] Optional: invite link accepted so the friend edge exists without a pending queue.
-
-## Send-back checklist (if a friend helps)
-
-- PR or patch with the smallest change that fixed the stuck step.
-- Note which clients were used (web / IDE badge / desktop).
-- Do not scrape chat history into a help packet — only what you typed into the packet.
+- Could you open it without the author’s laptop session?
+- Was the DM 1:1 (not a channel dump)?
+- What is still demo-only vs ready for Finish paths?

@@ -1,45 +1,45 @@
-# Help packet: Path 05 — input validation & abuse basics
+# Help packet: Path 05 — security & abuse basics
 
-This file is a **help packet**. The author is asking a friend to finish stuck work **on the friend's own AI usage** (Cursor, Claude, Codex, Gemini, or similar). Accepting is voluntary. Run agents on your own account — this packet does not use anyone else's vendor quota.
+This file is a **help packet**. Accepting is voluntary. Run agents on **your** account. Send back a PR (preferred) or a patch. Do not post to socials unless the author asks.
 
-Only the notes below are included. This is not a dump of chat history.
+Path: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-05-input-validation-and-abuse.md
 
-When you are done, send back a PR (preferred) or a patch. Do not post this packet to socials unless the author asks you to.
+## Failure scenario
 
-## 1. Goal
+Someone posts a 50kb board body or a `javascript:` “library link.” Or an anonymous client hits a write route and it succeeds. The friendly school becomes a spam magnet overnight.
 
-Write routes require auth; field lengths and URLs are validated server-side; official shelf / others’ data cannot be deleted by a normal user.
+## One concrete fix
 
-Path outline: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-05-input-validation-and-abuse.md
+Fail closed on unauthenticated writes; enforce server-side bounds and https URL cleaning; keep official shelf items undeletable by normal users.
 
-## 2. Context
+## Ask your AI to…
+
+1. Map durable write routes and confirm each requires auth.
+2. Reject over-long fields with clear 4xx (not silent truncate-only).
+3. Reuse existing https / host allowlist helpers for library and profile URLs.
+4. Optionally continue with one Path 05 security drill packet if the author names it.
+
+## Prove it
+
+- [ ] Over-long / bad URL rejected with a clear error.
+- [ ] Unauthenticated write fails.
+- [ ] Official items remain undeletable by normal users.
+
+## Friend review questions
+
+- Which routes were tested?
+- Any new SaaS dependency that was unnecessary?
+- Did an optional security drill ship in the same PR?
+
+## Context (fill in)
 
 - Repo URL:
 - Branch:
 - Relevant paths:
 - Routes or fields under test:
+- Optional security drill (if any):
+- What's blocked / tried:
 
-## 3. Constraints
+## How to send back
 
-- Fail closed for unauthenticated writes.
-- Prefer clear 4xx messages over silent truncate for builder UIs.
-- No new CAPTCHA/payment/rate-limit SaaS unless already required.
-- https-only (and host allowlists) where the product already enforces them.
-
-## 4. What's blocked / tried
-
-_(payload that slipped through, missing gate, error text)_
-
-## 5. Success criteria
-
-- Over-long / bad URL rejected with a clear error.
-- Unauthenticated write fails.
-- Official items remain undeletable by normal users.
-
-## 6. How to send back
-
-Open a pull request against the branch above (preferred). A patch file is fine if a PR is not practical.
-
-## 7. Optional: CodeFriends library item
-
-https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-05-input-validation-and-abuse.md
+Open a PR against the branch above. Patch file OK if a PR is not practical.

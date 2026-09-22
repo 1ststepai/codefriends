@@ -1,37 +1,29 @@
 # Path 02: Auth that isn't a toy
 
-**Goal:** Sign-in that maps to a real identity row (or an honest “blocked / dev-only” state) — not a shared password door and not a fake “Continue with X” button.
+**Stage:** Finish  
+**Goal:** Sign-in maps to a real identity (or an honest blocked/dev state) — not a shared password door or a fake “Continue with X” button.
 
 **Help packet:** [path-02-auth-that-isnt-a-toy.md](../help-packets/path-02-auth-that-isnt-a-toy.md)
 
-## Why this path
+## What can go wrong
 
-Toy auth trains bad habits: empty password forms, pretended OAuth, or silent merges by email. Production discipline means live providers where they exist, and clear blocked reasons where they do not.
+Pretend OAuth, silent email merges, or plaintext sessions train the cohort to ship unsafe “login.” Attackers and confused friends both win.
 
-## Constraints
+## Ask your AI to…
 
-- Prefer provider-native identity (e.g. Google OIDC) over inventing passwords.
-- Do not scrape IDE auth files or impersonate first-party CLI clients.
-- Linking a second provider to one user must be explicit — never auto-merge by email.
-- Dev username login stays **dev-only**; hide it in production UX unless explicitly enabled.
+1. List providers as live / unconfigured / blocked / dev — and match the UI to that list.
+2. Complete one real login path (start → callback → session or handoff).
+3. Store only hashed session tokens; regenerate or issue a new session after privilege changes when the stack supports it.
+4. Never scrape IDE auth files or impersonate first-party CLI clients.
 
-## Steps
+## Prove it
 
-1. **Catalog honesty.** List which providers are `live`, `unconfigured`, `blocked`, or `dev`. Match UI to that catalog.
-2. **One live path.** Complete start → callback → session (or handoff) for a real provider you can register.
-3. **Session shape.** Bearer (or equivalent) is random; store only a hash. Logout revokes that token.
-4. **Linking (optional).** While signed in, attach a second identity to the same user id without creating a duplicate person in the friends graph.
-5. **Failure modes.** Wrong callback URL, missing client secret, and “user denied” each produce a readable error — not a blank spinner.
+- [ ] One production-capable login works end-to-end.
+- [ ] Blocked providers show why they are blocked.
+- [ ] Logout revokes the bearer; username alone cannot steal a session.
 
-## Success criteria
+## Friend review questions
 
-- [ ] At least one production-capable login path works end-to-end.
-- [ ] Blocked providers show why they are blocked, not a dead button that pretends to work.
-- [ ] Sessions are not recoverable from the database as plaintext tokens.
-- [ ] You cannot “guess” another user’s session from a username alone.
-
-## Send-back checklist (if a friend helps)
-
-- PR with auth fix only — no drive-by redesign of the friends UI.
-- Document env vars touched (`CLIENT_ID`, callback URL, etc.).
-- Confirm smoke or manual login still passes after the change.
+- Which provider is live on this instance, and which are blocked (with reasons)?
+- Are secrets only in env — not in the PR?
+- Does the UI hide or clearly label dev-only login in production?

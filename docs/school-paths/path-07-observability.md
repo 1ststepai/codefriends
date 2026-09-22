@@ -1,37 +1,29 @@
-# Path 07: Observability (logs/errors)
+# Path 07: Observability
 
-**Goal:** Failures are diagnosable — structured enough logs, gated admin metrics if present, and errors that tell an operator what broke without dumping secrets.
+**Stage:** Ship  
+**Goal:** Failures are diagnosable — useful logs, gated admin metrics if present, no secrets in log lines.
 
 **Help packet:** [path-07-observability.md](../help-packets/path-07-observability.md)
 
-## Why this path
+## What can go wrong
 
-When the board is quiet and `/health` is red, you need a trail. Observability here means readable ops, not a full APM purchase.
+`/health` is red and nobody knows why. Tokens leak into logs. Metrics are public. Tunnel outages look like app outages.
 
-## Constraints
+## Ask your AI to…
 
-- Prefer loopback or same-origin for admin/metrics scrapes; do not open metrics to the world without a gate.
-- Never log access tokens, OAuth codes, or raw session material.
-- Distinguish app down vs tunnel/DNS down when self-hosting behind a tunnel.
-- Keep the feature freeze: wire existing `/metrics` / logs — do not bolt on a new product surface.
+1. Ensure one happy-path and one failure-path leave an actionable log breadcrumb.
+2. Gate `/metrics` (or equivalent) so anonymous access fails.
+3. Never log access tokens, OAuth codes, or raw sessions.
+4. Add or update a short “if health fails, check X then Y” operator note.
 
-## Steps
+## Prove it
 
-1. **Happy path log.** One request (health or login start) leaves a breadcrumb you can find in platform logs.
-2. **Failure path.** Force a known bad config (wrong callback, missing binding) and confirm the error is actionable.
-3. **Metrics gate.** If `/metrics` exists, confirm unauthenticated access is denied and authorized access works.
-4. **Client errors.** Popout/API error strings should help a builder fix config — not expose internal paths of other users.
-5. **Runbook note.** Add or update a short “if health fails, check X then Y” in operator docs you already maintain.
-
-## Success criteria
-
-- [ ] You can find a failed deploy or login in logs within a few minutes.
-- [ ] Admin metrics (if any) are not public.
+- [ ] You can find a forced failure in logs within a few minutes.
+- [ ] Admin metrics (if any) reject unauthenticated access.
 - [ ] No secrets in log lines from your change.
-- [ ] Tunnel vs app failure modes are documented when relevant.
 
-## Send-back checklist (if a friend helps)
+## Friend review questions
 
-- Before/after: how you reproduced the failure.
-- Link or path to the runbook blurb updated.
-- Confirm smoke still passes.
+- App down vs tunnel/DNS — which did you verify?
+- Is the runbook note somewhere the next operator will find?
+- Did the PR add a new dashboard product, or wire what already exists?

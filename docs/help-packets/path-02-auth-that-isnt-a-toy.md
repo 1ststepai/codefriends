@@ -1,46 +1,45 @@
 # Help packet: Path 02 — auth that isn't a toy
 
-This file is a **help packet**. The author is asking a friend to finish stuck work **on the friend's own AI usage** (Cursor, Claude, Codex, Gemini, or similar). Accepting is voluntary. Run agents on your own account — this packet does not use anyone else's vendor quota.
+This file is a **help packet**. Accepting is voluntary. Run agents on **your** account. Send back a PR (preferred) or a patch. Do not post to socials unless the author asks.
 
-Only the notes below are included. This is not a dump of chat history.
+Path: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-02-auth-that-isnt-a-toy.md
 
-When you are done, send back a PR (preferred) or a patch. Do not post this packet to socials unless the author asks you to.
+## Failure scenario
 
-## 1. Goal
+The login button looks finished — until a friend clicks it. The spinner dies, the callback 404s, or a “dev username” door is the only way in on a public host. Everyone learns the wrong lesson about auth.
 
-Make one production-capable login path work end-to-end, and keep blocked/dev providers honest in the UI — no pretend OAuth, no password door.
+## One concrete fix
 
-Path outline: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-02-auth-that-isnt-a-toy.md
+Land **one** honest production-capable login path end-to-end, and make blocked/dev providers tell the truth in the UI.
 
-## 2. Context
+## Ask your AI to…
+
+1. Align start → callback → session (or handoff) for the live provider.
+2. Match the registered redirect URI to env exactly.
+3. Store session tokens hashed; revoke on logout.
+4. Do not scrape IDE auth files or impersonate first-party CLI OAuth clients.
+
+## Prove it
+
+- [ ] Live login completes for a real account.
+- [ ] Blocked providers show a real reason (not a dead pretend button).
+- [ ] Smoke or a manual login still passes after the change.
+
+## Friend review questions
+
+- Which env names changed (values redacted)?
+- Is dev login hidden or gated off production?
+- Auth-only PR, or did UI drive-bys sneak in?
+
+## Context (fill in)
 
 - Repo URL:
 - Branch:
 - Relevant paths:
-- Provider(s) involved:
+- Provider(s):
 - Callback URL configured:
+- What's blocked / tried:
 
-## 3. Constraints
+## How to send back
 
-- Do not scrape IDE auth files or impersonate first-party CLI OAuth clients.
-- Do not auto-merge identities by email.
-- Dev username login must stay out of production UX unless explicitly enabled.
-- Auth-only PR — no drive-by friends UI redesign.
-
-## 4. What's blocked / tried
-
-_(start/callback errors, env names without secret values)_
-
-## 5. Success criteria
-
-- Live provider completes start → session (or handoff).
-- Blocked providers show a real reason.
-- Sessions stored hashed; logout revokes the bearer.
-
-## 6. How to send back
-
-Open a pull request against the branch above (preferred). A patch file is fine if a PR is not practical.
-
-## 7. Optional: CodeFriends library item
-
-https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-02-auth-that-isnt-a-toy.md
+Open a PR against the branch above. Patch file OK if a PR is not practical.

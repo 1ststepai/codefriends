@@ -1,44 +1,44 @@
 # Help packet: Path 03 — data you won't lose
 
-This file is a **help packet**. The author is asking a friend to finish stuck work **on the friend's own AI usage** (Cursor, Claude, Codex, Gemini, or similar). Accepting is voluntary. Run agents on your own account — this packet does not use anyone else's vendor quota.
+This file is a **help packet**. Accepting is voluntary. Run agents on **your** account. Send back a PR (preferred) or a patch. Do not post to socials unless the author asks.
 
-Only the notes below are included. This is not a dump of chat history.
+Path: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-03-data-you-wont-lose.md
 
-When you are done, send back a PR (preferred) or a patch. Do not post this packet to socials unless the author asks you to.
+## Failure scenario
 
-## 1. Goal
+The board filled up all afternoon. Someone redeployed. Every topic vanished. The cohort stops writing because the school “forgets” them.
 
-Durable rows (friends / DMs / board / library as relevant) survive process restart via the existing store + named migrations. Seeds stay idempotent.
+## One concrete fix
 
-Path outline: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-03-data-you-wont-lose.md
+Make the durable write path survive process restart (or Worker redeploy) with named migrations and idempotent seeds — no boot wipe.
 
-## 2. Context
+## Ask your AI to…
+
+1. Identify store driver + tables for the rows that disappeared.
+2. Add an additive migration only if schema is missing.
+3. Prove write → restart → read for one known row.
+4. Keep demo/official seeds insert-when-missing only.
+
+## Prove it
+
+- [ ] Restart keeps the row under test.
+- [ ] Migration name listed in the PR (if any).
+- [ ] Seeds do not truncate cohort data.
+
+## Friend review questions
+
+- Presence-only vs durable fields — which was confused?
+- Local sqlite vs D1/Turso — which driver did you verify?
+- History caps still documented?
+
+## Context (fill in)
 
 - Repo URL:
 - Branch:
 - Relevant paths:
-- Store driver (sqlite file / D1 / other):
+- Store driver:
+- What's blocked / tried:
 
-## 3. Constraints
+## How to send back
 
-- Prefer additive named migrations; do not wipe cohort data on boot.
-- Presence may stay in memory; durable fields must write to the store.
-- Respect existing history caps.
-
-## 4. What's blocked / tried
-
-_(what disappeared after restart, migration names tried)_
-
-## 5. Success criteria
-
-- Restart keeps the rows under test.
-- Migration list updated if a schema change was required.
-- Seeds insert-when-missing only.
-
-## 6. How to send back
-
-Open a pull request against the branch above (preferred). A patch file is fine if a PR is not practical.
-
-## 7. Optional: CodeFriends library item
-
-https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-03-data-you-wont-lose.md
+Open a PR against the branch above. Patch file OK if a PR is not practical.

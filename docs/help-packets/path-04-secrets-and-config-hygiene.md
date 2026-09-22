@@ -1,44 +1,44 @@
 # Help packet: Path 04 — secrets & config hygiene
 
-This file is a **help packet**. The author is asking a friend to finish stuck work **on the friend's own AI usage** (Cursor, Claude, Codex, Gemini, or similar). Accepting is voluntary. Run agents on your own account — this packet does not use anyone else's vendor quota.
+This file is a **help packet**. Accepting is voluntary. Run agents on **your** account. Send back a PR (preferred) or a patch. Do not post to socials unless the author asks.
 
-Only the notes below are included. This is not a dump of chat history.
+Path: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-04-secrets-and-config-hygiene.md
 
-When you are done, send back a PR (preferred) or a patch. Do not post this packet to socials unless the author asks you to.
+## Failure scenario
 
-## 1. Goal
+Login “randomly” fails after a deploy. The real bug: callback URL drifted, or a teammate committed a client secret “just for local.” Rotation becomes a fire drill.
 
-Secrets stay in env / platform stores; `.env.example` documents names; OAuth (or similar) callback URIs match env exactly.
+## One concrete fix
 
-Path outline: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-04-secrets-and-config-hygiene.md
+Secrets stay in env/platform stores; `.env.example` documents names only; OAuth (or similar) callback URIs match env **exactly**.
 
-## 2. Context
+## Ask your AI to…
+
+1. Diff env example vs required runtime names.
+2. Fix callback / public URL / popout URL consistency (http(s) only for browser redirects).
+3. Call out build-time vs runtime vars.
+4. Search the change set for accidental secret values — never paste them into the PR.
+
+## Prove it
+
+- [ ] Fresh clone can configure from example + docs.
+- [ ] Callback URI matches the IdP console entry.
+- [ ] PR contains no secret values.
+
+## Friend review questions
+
+- Any rotation the operator must do after merge?
+- Which host owns which URL?
+- Would rotating the secret require a code change?
+
+## Context (fill in)
 
 - Repo URL:
 - Branch:
 - Relevant paths:
-- Hosts involved (API / popout / IdP console):
+- Hosts (API / popout / IdP):
+- What's blocked / tried:
 
-## 3. Constraints
+## How to send back
 
-- Never commit real secret values — names and shapes only.
-- Do not rewrite app code just to rotate a secret.
-- Call out build-time (`VITE_*`) vs runtime env clearly.
-
-## 4. What's blocked / tried
-
-_(mismatch symptoms; rotate-if-leaked notes — no raw secrets)_
-
-## 5. Success criteria
-
-- Fresh clone can configure from example + docs.
-- Callback URI matches exactly.
-- No secrets in the PR diff.
-
-## 6. How to send back
-
-Open a pull request against the branch above (preferred). A patch file is fine if a PR is not practical.
-
-## 7. Optional: CodeFriends library item
-
-https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-04-secrets-and-config-hygiene.md
+Open a PR against the branch above. Patch file OK if a PR is not practical.

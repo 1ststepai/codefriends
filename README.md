@@ -69,13 +69,14 @@ Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_
 
 ### School Paths
 
-Eight free, tool-agnostic production outlines (presence → backups) for the AI coding school — no certificates, no gated tiers:
+**Build → Finish → Ship** — eight free, tool-agnostic production outlines (friend-visible demo → restore drill). No certificates, no gated tiers:
 
 - Index: [docs/school-paths/](./docs/school-paths/)
-- Path help packets: [docs/help-packets/](./docs/help-packets/)
-- Optional weekly board pins: [docs/school-board-prompts.md](./docs/school-board-prompts.md)
+- Path help packets: [docs/help-packets/](./docs/help-packets/) (failure → fix → Ask your AI → prove-it → friend review)
+- Optional Path 05 security drills on the official shelf (session regenerate, redirect allowlist, frame denial, session-store ACL)
+- Weekly **Ship / Demo Friday** pins: [docs/school-board-prompts.md](./docs/school-board-prompts.md)
 
-**Where to find them in the app:** sign in → **Library** tab → official shelf (author `1ststep`). Cards for **School Paths**, **Path 01** … **Path 08**, and **Path help packets** open the GitHub markdown. Same idempotent seed path as the other 1stStep shelf entries (`packages/core/src/seed.ts`).
+**Where to find them in the app:** sign in → **Library** tab → official shelf (author `1ststep`). Cards for **School Paths**, **Path 01** … **Path 08**, **Path help packets**, and optional **Security:** drills open the GitHub markdown. Same idempotent seed path as the other 1stStep shelf entries (`packages/core/src/seed.ts`).
 
 **DM history cap:** each 1:1 thread keeps the last **200** messages (`CODEFRIENDS_DM_HISTORY_LIMIT`). Older rows are pruned on write. Text only — no media, no blob store.
 

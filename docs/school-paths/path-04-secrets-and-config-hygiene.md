@@ -1,37 +1,29 @@
 # Path 04: Secrets & config hygiene
 
-**Goal:** Runtime secrets live in env / platform secret stores; the repo only ships examples and docs. Callback URLs match exactly what the IdP allows.
+**Stage:** Finish  
+**Goal:** Secrets live in env / platform stores; the repo ships examples only. Callback URLs match the IdP exactly.
 
 **Help packet:** [path-04-secrets-and-config-hygiene.md](../help-packets/path-04-secrets-and-config-hygiene.md)
 
-## Why this path
+## What can go wrong
 
-Leaked keys and mismatched OAuth callbacks are the fastest way to burn a free-tier weekend. Hygiene is a production skill, not a polish pass.
+A committed API key or a drifted OAuth callback burns a free-tier weekend and trains “just paste the secret in chat.”
 
-## Constraints
+## Ask your AI to…
 
-- Never commit `.env`, private keys, or session material.
-- `.env.example` documents names and shapes — not real values.
-- Public URL vs popout URL vs OAuth callback must be consistent (http(s) only for browser redirects).
-- Rotating a secret should not require rewriting application code.
+1. Inventory every secret name the app needs.
+2. Document each in `.env.example` with a one-line comment — never real values.
+3. Align public URL, popout URL, and OAuth callback (http(s) only for browser redirects).
+4. Separate build-time (`VITE_*`) vars from runtime API config.
 
-## Steps
+## Prove it
 
-1. **Inventory.** List every secret the app needs (DB URL, OAuth client secret, admin token, …).
-2. **Example file.** Ensure each name appears in `.env.example` with a one-line comment.
-3. **Callback match.** Register the exact redirect URI the code uses; fix drift before debugging “login broken.”
-4. **Build-time vs runtime.** Know which vars are baked into a static popout at build time vs read by the API at runtime.
-5. **Leak check.** Search the repo and recent commits for accidental tokens; rotate if anything landed.
+- [ ] Fresh clone configures from example + docs.
+- [ ] No real secrets in the change set.
+- [ ] Callback URI matches env exactly.
 
-## Success criteria
+## Friend review questions
 
-- [ ] A fresh clone can configure from `.env.example` + docs alone.
-- [ ] No real secrets in git history for this change set.
-- [ ] OAuth (or other) callback URI in the console matches env exactly.
-- [ ] You know which deploy step must be redone when a Vite/`VITE_*` value changes.
-
-## Send-back checklist (if a friend helps)
-
-- Diff shows `.env.example` / docs only for secret *names* — never values.
-- Call out any rotation the operator must do after merge.
-- Confirm local boot still reads config the same way.
+- Which deploy step must be redone if a Vite env changes?
+- Would rotating a secret require a code change?
+- Any tokens in recent commits that need rotation?

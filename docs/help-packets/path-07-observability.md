@@ -1,45 +1,44 @@
 # Help packet: Path 07 — observability
 
-This file is a **help packet**. The author is asking a friend to finish stuck work **on the friend's own AI usage** (Cursor, Claude, Codex, Gemini, or similar). Accepting is voluntary. Run agents on your own account — this packet does not use anyone else's vendor quota.
+This file is a **help packet**. Accepting is voluntary. Run agents on **your** account. Send back a PR (preferred) or a patch. Do not post to socials unless the author asks.
 
-Only the notes below are included. This is not a dump of chat history.
+Path: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-07-observability.md
 
-When you are done, send back a PR (preferred) or a patch. Do not post this packet to socials unless the author asks you to.
+## Failure scenario
 
-## 1. Goal
+Health is red. Logs are either empty or full of bearer tokens. Someone scrapes `/metrics` from the public internet. The next operator has no runbook.
 
-Failures are diagnosable: useful logs, gated admin metrics if present, no secrets in log lines. Prefer existing `/metrics` / platform logs — no new product surface.
+## One concrete fix
 
-Path outline: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-07-observability.md
+Actionable failure breadcrumbs, gated admin metrics if present, zero secrets in logs — wire what exists; do not invent a new product surface.
 
-## 2. Context
+## Ask your AI to…
+
+1. Reproduce one known bad config and confirm an actionable log line.
+2. Ensure metrics/admin routes reject anonymous access.
+3. Scrub tokens/codes/sessions from log paths you touch.
+4. Add a short “if health fails, check X then Y” note where operator docs already live.
+
+## Prove it
+
+- [ ] Forced failure is findable in logs.
+- [ ] Metrics (if any) are not public.
+- [ ] No secrets in log lines from this change.
+
+## Friend review questions
+
+- App vs tunnel/DNS — which did you verify?
+- Feature freeze respected (no new dashboard product)?
+- Where does the next operator read the runbook blurb?
+
+## Context (fill in)
 
 - Repo URL:
 - Branch:
 - Relevant paths:
-- Where logs are read (platform / file / journal):
+- Where logs are read:
+- What's blocked / tried:
 
-## 3. Constraints
+## How to send back
 
-- Do not expose metrics publicly without a gate.
-- Never log tokens, OAuth codes, or session material.
-- Distinguish app vs tunnel/DNS failure when relevant.
-- Feature freeze — wire what exists; do not add a dashboard product unless already specified elsewhere.
-
-## 4. What's blocked / tried
-
-_(symptom, what you searched for in logs, false leads)_
-
-## 5. Success criteria
-
-- Known failure leaves an actionable log trail.
-- Metrics (if any) reject anonymous access.
-- Short runbook blurb updated if operator docs exist.
-
-## 6. How to send back
-
-Open a pull request against the branch above (preferred). A patch file is fine if a PR is not practical.
-
-## 7. Optional: CodeFriends library item
-
-https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-07-observability.md
+Open a PR against the branch above. Patch file OK if a PR is not practical.

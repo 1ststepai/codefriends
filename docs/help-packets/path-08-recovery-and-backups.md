@@ -1,45 +1,44 @@
 # Help packet: Path 08 — recovery & backups
 
-This file is a **help packet**. The author is asking a friend to finish stuck work **on the friend's own AI usage** (Cursor, Claude, Codex, Gemini, or similar). Accepting is voluntary. Run agents on your own account — this packet does not use anyone else's vendor quota.
+This file is a **help packet**. Accepting is voluntary. Run agents on **your** account. Send back a PR (preferred) or a patch. Do not post to socials unless the author asks.
 
-Only the notes below are included. This is not a dump of chat history.
+Path: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-08-recovery-and-backups.md
 
-When you are done, send back a PR (preferred) or a patch. Do not post this packet to socials unless the author asks you to.
+## Failure scenario
 
-## 1. Goal
+The laptop that held the SQLite file is gone. “Just re-seed” brings back demo users — not the cohort’s board or DMs. Nobody practiced restore while calm.
 
-Document and practice one restore path for durable data (SQLite copy, D1 export, etc.). Seeds are not a substitute for cohort backups.
+## One concrete fix
 
-Path outline: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-08-recovery-and-backups.md
+Take a real backup, restore once into a scratch target, read a known durable row, and write the operator paragraph.
 
-## 2. Context
+## Ask your AI to…
+
+1. Locate data (file path or DB id — no credentials in the packet).
+2. Perform backup using the platform’s boring option (copy/export).
+3. Restore to non-production and query one known row.
+4. Confirm idempotent seeds do not wipe restored cohort rows.
+
+## Prove it
+
+- [ ] Backup artifact exists.
+- [ ] Restore drill showed the known row.
+- [ ] Operator note lists where/how/when.
+
+## Friend review questions
+
+- Practiced restore, or backup-only theater?
+- Backup blobs kept out of git?
+- What is the action if the primary host dies tonight?
+
+## Context (fill in)
 
 - Repo URL:
 - Branch:
 - Relevant paths:
-- Data location (file path or DB id — no credentials):
+- Data location (no credentials):
+- What's blocked / tried:
 
-## 3. Constraints
+## How to send back
 
-- Practice restore on a scratch/non-production target first.
-- Do not commit backup blobs into git.
-- Confirm idempotent seeds do not wipe restored cohort rows.
-- Prefer free/platform-native export over new paid SaaS for this path.
-
-## 4. What's blocked / tried
-
-_(backup command used, restore error, what row you expected to see)_
-
-## 5. Success criteria
-
-- Backup artifact exists.
-- Restore drill showed a known durable row.
-- Operator note lists where backups live and how to restore.
-
-## 6. How to send back
-
-Open a pull request against the branch above (preferred). A patch file is fine if a PR is not practical. Redact secrets from any command logs.
-
-## 7. Optional: CodeFriends library item
-
-https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-08-recovery-and-backups.md
+Open a PR against the branch above. Patch file OK if a PR is not practical. Redact secrets from command logs.

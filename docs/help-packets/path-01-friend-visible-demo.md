@@ -1,44 +1,44 @@
 # Help packet: Path 01 — friend-visible demo
 
-This file is a **help packet**. The author is asking a friend to finish stuck work **on the friend's own AI usage** (Cursor, Claude, Codex, Gemini, or similar). Accepting is voluntary. Run agents on your own account — this packet does not use anyone else's vendor quota.
+This file is a **help packet**. Accepting is voluntary. Run agents on **your** account. Send back a PR (preferred) or a patch. Do not post to socials unless the author asks.
 
-Only the notes below are included. This is not a dump of chat history.
+Path: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-01-friend-visible-demo.md
 
-When you are done, send back a PR (preferred) or a patch. Do not post this packet to socials unless the author asks you to.
+## Failure scenario
 
-## 1. Goal
+Two builders swear the chat works — but only on one laptop. Nobody else ever appears online, and the “demo” is a private sketch. Demo day has nothing friend-visible to show.
 
-Ship a friend-visible loop: two users online at once, and one 1:1 DM delivered (and visible after refresh if history is claimed).
+## One concrete fix
 
-Path outline: https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-01-friend-visible-demo.md
+Make the smallest **Build** loop real: two signed-in users online at once, and one 1:1 DM delivered (and still there after refresh if history is claimed).
 
-## 2. Context
+## Ask your AI to…
+
+1. Trace presence + DM send/receive for this repo (or the author’s stack).
+2. Keep text-only — no voice, Live Share, or media.
+3. Add the smallest change that unblocks the friend-visible proof.
+4. Note which clients were used (web / desktop / IDE badge).
+
+## Prove it
+
+- [ ] Two usernames online simultaneously.
+- [ ] One DM landed for the intended friend.
+- [ ] PR description names who/what/when (no secrets).
+
+## Friend review questions
+
+- Could a second person reproduce without the author’s local-only process?
+- Was the message 1:1?
+- What Finish path should come next?
+
+## Context (fill in)
 
 - Repo URL:
 - Branch:
 - Relevant paths:
-- Clients under test (web / desktop / IDE badge):
+- Clients under test:
+- What's blocked / tried:
 
-## 3. Constraints
+## How to send back
 
-- Text only — no voice, Live Share, or media.
-- Do not invent a second chat product; fix the smallest presence + DM gap.
-- Keep tool-agnostic; no vendor lock-in in the fix.
-
-## 4. What's blocked / tried
-
-_(what failed, error text, which two usernames/clients)_
-
-## 5. Success criteria
-
-- Two users online simultaneously.
-- One DM delivered to the intended friend.
-- Short note of proof (who/what/when) in the PR description.
-
-## 6. How to send back
-
-Open a pull request against the branch above (preferred). A patch file is fine if a PR is not practical.
-
-## 7. Optional: CodeFriends library item
-
-https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-01-friend-visible-demo.md
+Open a PR against the branch above. Patch file OK if a PR is not practical.
