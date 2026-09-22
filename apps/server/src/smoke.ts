@@ -617,7 +617,10 @@ async function buildLibrary(dbPath: string) {
       "list official shelf as user B",
     );
     const official = listed.items.filter((item) => item.source === "official");
-    assert.ok(official.length >= 7, "official 1stStep shelf must include starters, free tools, and Help packet");
+    assert.ok(
+      official.length >= 21,
+      "official shelf must include starters, School Paths 01–08, path help packets, and Path 05 security drills",
+    );
     assert.equal(official[0]?.url, "https://github.com/1ststepai/ai-user-starter-kit");
     const officialUrls = official.map((item) => item.url);
     for (const url of [
@@ -628,11 +631,24 @@ async function buildLibrary(dbPath: string) {
       "https://github.com/1ststepai/1ststep-os-audit",
       "https://github.com/1ststepai/1ststep-os",
       "https://github.com/1ststepai/codefriends/blob/main/docs/help-packet.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/README.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-01-friend-visible-demo.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/school-paths/path-08-recovery-and-backups.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/help-packets/README.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/help-packets/security-session-regenerate.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/help-packets/security-redirect-allowlist.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/help-packets/security-frame-denial.md",
+      "https://github.com/1ststepai/codefriends/blob/main/docs/help-packets/security-session-store-acl.md",
     ]) {
       assert.ok(officialUrls.includes(url), `official shelf missing ${url}`);
     }
     assert.ok(official.some((item) => item.title === "1stStep OS Audit"));
     assert.ok(official.some((item) => item.title === "1stStep OS"));
+    assert.ok(official.some((item) => item.title === "School Paths"));
+    assert.ok(official.some((item) => item.title === "Path 01: Friend-visible demo"));
+    assert.ok(official.some((item) => item.title === "Path 05: Security & abuse basics"));
+    assert.ok(official.some((item) => item.title === "Path help packets"));
+    assert.ok(official.some((item) => item.title === "Security: Frame denial"));
     assert.ok(official.every((item) => item.authorUsername === "1ststep"));
     assert.ok(listed.items.every((item) => item.source === "official"));
 

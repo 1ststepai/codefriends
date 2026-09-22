@@ -6,7 +6,7 @@
 
 An **AI coding school with your friends in the room** — **Cursor / Claude / Codex / Gemini**.
 
-Presence, 1:1 DMs, invite links, a short profile (GitHub / tools / optional socials), a **school board** (tiny forum), and a **build library** (1stStep starters + cohort shares + a portable **help packet**) live in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM. Prompt/knowledge base and learning paths are next — this is not a Discord-for-devs headline.
+Presence, 1:1 DMs, invite links, a short profile (GitHub / tools / optional socials), a **school board** (tiny forum), and a **build library** (1stStep starters + **School Paths** + cohort shares + a portable **help packet**) live in a **lightweight popout window / PWA**. The IDE only gets a thin status-bar badge so chat does not burn editor RAM. This is not a Discord-for-devs headline.
 
 > **Not affiliated with Cursor, Anthropic, OpenAI, or Google.** This is an independent community project.
 
@@ -65,7 +65,18 @@ Schema + named migrations live in `packages/core/src/sql.ts` (including `002_dm_
 
 **School board (v0):** Reddit-style but tiny — a topic (`title` + `body` text) and replies, SQLite only. **Any authenticated user on this instance can read and post.** That is the secure default for a self-hosted school cohort sharing one server; there is no public anonymous board. Friends-only visibility is not in v0. No upvotes, images, or live sockets — the popout loads over HTTP. Body is stored as plain text (markdown is accepted and shown as-is).
 
-**Help packet (v0):** on the Library tab, write a portable markdown brief so a friend can finish stuck work **on their own AI usage**, then send back a PR. You create the packet to share; they accept voluntarily. They run agents on their account — this does not stretch vendor quotas. Contents are only the notes you type (no chat-history scrape). Copy or download a `.md` file; drafts stay in `help_packets` for you. Nothing is auto-posted to socials. Template: [docs/help-packet.md](./docs/help-packet.md).
+**Help packet (v0):** on the Library tab, write a portable markdown brief so a friend can finish stuck work **on their own AI usage**, then send back a PR. You create the packet to share; they accept voluntarily. They run agents on their account — this does not stretch vendor quotas. Contents are only the notes you type (no chat-history scrape). Copy or download a `.md` file; drafts stay in `help_packets` for you. Nothing is auto-posted to socials. Template: [docs/help-packet.md](./docs/help-packet.md). Path-specific templates: [docs/help-packets/](./docs/help-packets/).
+
+### School Paths
+
+**Build → Finish → Ship** — eight free, tool-agnostic production outlines (friend-visible demo → restore drill). No certificates, no gated tiers:
+
+- Index: [docs/school-paths/](./docs/school-paths/)
+- Path help packets: [docs/help-packets/](./docs/help-packets/) (failure → fix → Ask your AI → prove-it → friend review)
+- Optional Path 05 security drills on the official shelf (session regenerate, redirect allowlist, frame denial, session-store ACL)
+- Weekly **Ship / Demo Friday** pins: [docs/school-board-prompts.md](./docs/school-board-prompts.md)
+
+**Where to find them in the app:** sign in → **Library** tab → official shelf (author `1ststep`). Cards for **School Paths**, **Path 01** … **Path 08**, **Path help packets**, and optional **Security:** drills open the GitHub markdown. Same idempotent seed path as the other 1stStep shelf entries (`packages/core/src/seed.ts`).
 
 **DM history cap:** each 1:1 thread keeps the last **200** messages (`CODEFRIENDS_DM_HISTORY_LIMIT`). Older rows are pruned on write. Text only — no media, no blob store.
 

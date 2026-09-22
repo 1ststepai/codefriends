@@ -4,7 +4,7 @@ A **help packet** is a short markdown brief you write on purpose so a friend can
 
 You create the packet to share. They accept voluntarily. They run agents on **their** account — this does not stretch anyone else's vendor quota. Contents are only what you type; CodeFriends does not scrape chat history. Copy or download the `.md` file and paste it into a provider chat. Nothing is auto-posted to socials.
 
-Use the **Help packet** creator on the CodeFriends Library tab, or copy the template below.
+Use the **Help packet** creator on the CodeFriends Library tab, or copy the template below. Path-specific templates (School Paths 01–08): [help-packets/](./help-packets/).
 
 ```markdown
 # Help packet: (title)
