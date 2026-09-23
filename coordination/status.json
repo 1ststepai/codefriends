@@ -10,9 +10,9 @@
   "tasks": [
     {
       "id": "COORD-PILOT-003",
-      "status": "ready",
+      "status": "review",
       "ownerRole": "codefriends-engineer",
-      "nextAction": "Review isolated coordination pilot; no product implementation authorization",
+      "nextAction": "Independent coordination review and owner adoption; no merge or product deployment",
       "ownerDecisionRequired": false
     }
   ],
