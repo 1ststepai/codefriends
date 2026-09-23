@@ -1,0 +1,187 @@
+{
+  "schemaVersion": "firststep.coordination.v1",
+  "repo": "1ststepai/codefriends",
+  "portfolio": false,
+  "defaultBranch": "main",
+  "authority": "codefriends-engineer",
+  "baseline": "8311de5ed59b67080fa8008b229ed2b92c145937",
+  "allowedAgents": [
+    "codex",
+    "cursor",
+    "claude",
+    "verifier",
+    "growth",
+    "community",
+    "human"
+  ],
+  "registeredRepos": [
+    "1ststepai/main-website",
+    "1ststepai/1ststep-resume",
+    "1ststepai/codefriends",
+    "1ststepai/1ststep-control-plane"
+  ],
+  "roleBindings": [
+    {
+      "agentId": "portfolio-lead",
+      "role": "portfolio-coordinator",
+      "identities": [
+        "codex",
+        "cursor"
+      ],
+      "repos": [
+        "1ststepai/main-website",
+        "1ststepai/1ststep-resume",
+        "1ststepai/codefriends",
+        "1ststepai/1ststep-control-plane"
+      ],
+      "products": [
+        "business",
+        "job-agent",
+        "resume-marketing",
+        "partners",
+        "codefriends"
+      ]
+    },
+    {
+      "agentId": "public-lead-engineer",
+      "role": "public-lead-engineer",
+      "identities": [
+        "codex",
+        "cursor"
+      ],
+      "repos": [
+        "1ststepai/main-website"
+      ],
+      "products": [
+        "business"
+      ]
+    },
+    {
+      "agentId": "app-engineering-orchestrator",
+      "role": "app-engineering-orchestrator",
+      "identities": [
+        "codex",
+        "cursor",
+        "claude"
+      ],
+      "repos": [
+        "1ststepai/1ststep-resume"
+      ],
+      "products": [
+        "job-agent",
+        "resume-marketing",
+        "partners"
+      ],
+      "authority": "EXTERNAL_APP_FAMILY"
+    },
+    {
+      "agentId": "codefriends-engineer",
+      "role": "codefriends-engineer",
+      "identities": [
+        "codex",
+        "cursor"
+      ],
+      "repos": [
+        "1ststepai/codefriends"
+      ],
+      "products": [
+        "codefriends"
+      ]
+    },
+    {
+      "agentId": "ecosystem-auditor",
+      "role": "ecosystem-auditor",
+      "identities": [
+        "claude",
+        "verifier"
+      ],
+      "repos": [
+        "1ststepai/main-website",
+        "1ststepai/1ststep-resume",
+        "1ststepai/codefriends",
+        "1ststepai/1ststep-control-plane"
+      ],
+      "products": [
+        "business",
+        "job-agent",
+        "resume-marketing",
+        "partners",
+        "codefriends"
+      ]
+    },
+    {
+      "agentId": "growth-agent",
+      "role": "growth",
+      "identities": [
+        "growth"
+      ],
+      "repos": [
+        "1ststepai/main-website",
+        "1ststepai/1ststep-resume",
+        "1ststepai/codefriends",
+        "1ststepai/1ststep-control-plane"
+      ],
+      "products": [
+        "business",
+        "job-agent",
+        "resume-marketing",
+        "partners",
+        "codefriends"
+      ]
+    },
+    {
+      "agentId": "community-agent",
+      "role": "community",
+      "identities": [
+        "community"
+      ],
+      "repos": [
+        "1ststepai/main-website",
+        "1ststepai/1ststep-resume",
+        "1ststepai/codefriends",
+        "1ststepai/1ststep-control-plane"
+      ],
+      "products": [
+        "codefriends",
+        "business"
+      ]
+    },
+    {
+      "agentId": "evan",
+      "role": "owner",
+      "identities": [
+        "human"
+      ],
+      "repos": [
+        "1ststepai/main-website",
+        "1ststepai/1ststep-resume",
+        "1ststepai/codefriends",
+        "1ststepai/1ststep-control-plane"
+      ],
+      "products": [
+        "business",
+        "job-agent",
+        "resume-marketing",
+        "partners",
+        "codefriends"
+      ]
+    }
+  ],
+  "controlPlane": {
+    "repo": "1ststepai/1ststep-control-plane",
+    "branch": "coordination-state"
+  },
+  "sensitiveActions": [
+    "merge",
+    "production_deploy",
+    "apply_migration",
+    "purchase",
+    "billing_change",
+    "auth_change",
+    "entitlement_change",
+    "publish",
+    "trade",
+    "outreach"
+  ],
+  "paidApiBudgetUsd": 0
+}

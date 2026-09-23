@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "firststep.ownership.v1",
+  "authority": "codefriends-engineer",
+  "paths": [
+    "coordination/**",
+    "scripts/agent-coordinator.mjs",
+    "scripts/agent-relay.mjs",
+    "scripts/agent-status-bridge.mjs",
+    "scripts/coordination-contracts.mjs",
+    "scripts/coordination-store.mjs",
+    "docs/agents/OPERATING.md",
+    "tests/coordination/**"
+  ],
+  "excluded": "All product source and existing release/auth/data/integration authority"
+}

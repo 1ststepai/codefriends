@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "firststep.tasks.v1",
+  "tasks": [
+    {
+      "id": "COORD-PILOT-003",
+      "repo": "1ststepai/codefriends",
+      "kind": "PILOT_ADOPTION",
+      "status": "ready",
+      "priority": 5,
+      "paths": [
+        "coordination/**",
+        "scripts/agent-coordinator.mjs",
+        "scripts/agent-relay.mjs",
+        "scripts/agent-status-bridge.mjs",
+        "scripts/coordination-contracts.mjs",
+        "scripts/coordination-store.mjs",
+        "docs/agents/OPERATING.md",
+        "tests/coordination/**"
+      ],
+      "eligibleAgents": [
+        "codex",
+        "cursor"
+      ],
+      "dependsOn": [],
+      "acceptanceCriteria": [
+        "Metadata/relay contract tests pass",
+        "Existing authority and product source unchanged",
+        "Independent milestone review before adoption"
+      ],
+      "ownerRole": "codefriends-engineer",
+      "nextAction": "Review isolated coordination pilot; no product implementation authorization",
+      "baseline": "8311de5ed59b67080fa8008b229ed2b92c145937",
+      "ownerDecisionRequired": false,
+      "auditRequired": true,
+      "candidateSha": null,
+      "evidence": []
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "firststep.status.v1",
+  "repo": "1ststepai/codefriends",
+  "authority": "codefriends-engineer",
+  "sourceSha": "8311de5ed59b67080fa8008b229ed2b92c145937",
+  "testedSha": null,
+  "previewSha": null,
+  "productionSha": null,
+  "truth": "SOURCE_OBSERVED_ONLY",
+  "tasks": [
+    {
+      "id": "COORD-PILOT-003",
+      "status": "ready",
+      "ownerRole": "codefriends-engineer",
+      "nextAction": "Review isolated coordination pilot; no product implementation authorization",
+      "ownerDecisionRequired": false
+    }
+  ],
+  "runtime": "UNKNOWN",
+  "sharedState": {
+    "repo": "1ststepai/1ststep-control-plane",
+    "branch": "coordination-state"
+  }
+}
