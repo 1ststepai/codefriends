@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "firststep.tasks.v1",
+  "tasks": [
+    {
+      "id": "COORD-PILOT-003",
+      "repo": "1ststepai/codefriends",
+      "kind": "PILOT_ADOPTION",
+      "status": "review",
+      "priority": 5,
+      "paths": [
+        "coordination/**",
+        "scripts/agent-coordinator.mjs",
+        "scripts/agent-relay.mjs",
+        "scripts/agent-status-bridge.mjs",
+        "scripts/coordination-contracts.mjs",
+        "scripts/coordination-store.mjs",
+        "docs/agents/OPERATING.md",
+        "tests/coordination/**"
+      ],
+      "eligibleAgents": [
+        "codex",
+        "cursor"
+      ],
+      "dependsOn": [],
+      "acceptanceCriteria": [
+        "Metadata/relay contract tests pass",
+        "Existing authority and product source unchanged",
+        "Independent milestone review before adoption"
+      ],
+      "ownerRole": "codefriends-engineer",
+      "nextAction": "Independent coordination review and owner adoption; no merge or product deployment",
+      "baseline": "8311de5ed59b67080fa8008b229ed2b92c145937",
+      "ownerDecisionRequired": false,
+      "auditRequired": true,
+      "candidateSha": "0f89a88c6bd769673d919c84ca1ec48ea218292c",
+      "evidence": [
+        "node --test tests/coordination/contracts.test.mjs: 11 PASS",
+        "node scripts/agent-coordinator.mjs preflight COORD-PILOT-003: PASS",
+        "node scripts/agent-status-bridge.mjs check: PASS",
+        "git diff --check: PASS"
+      ],
+      "claimedBy": "portfolio-lead",
+      "implementationProvider": "codex"
+    }
+  ]
+}
